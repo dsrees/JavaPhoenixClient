@@ -1,8 +1,8 @@
 {
   "package": {
     "name": "JavaPhoenixClient",
-    "repo": "maven",
-    "subject": "dsrees",
+    "repo": "JavaPhoenixClient",
+    "subject": "drees",
     "desc": "Phoenix client for the JVM built with Kotlin",
     "website_url": "https://github.com/dsrees/JavaPhoenixClient",
     "issue_tracker_url": "https://github.com/dsrees/JavaPhoenixClient/issues",
