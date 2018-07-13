@@ -1,0 +1,27 @@
+{
+  "package": {
+    "name": "JavaPhoenixClient",
+    "repo": "maven",
+    "subject": "dsrees",
+    "desc": "Phoenix client for the JVM built with Kotlin",
+    "website_url": "https://github.com/dsrees/JavaPhoenixClient",
+    "issue_tracker_url": "https://github.com/dsrees/JavaPhoenixClient/issues",
+    "vcs_url": "https://github.com/dsrees/JavaPhoenixClient.git",
+    "licenses": ["MIT"],
+    "labels": ["phoenix", "websockets", "android", "kotlin-library", "phoenix-framework", "phoenix-channels"],
+    "public_download_numbers": false,
+    "public_stats": false
+  },
+ 
+  "version": {
+    "name": "0.1.0",
+    "released": "2018-07-13",
+    "gpgSign": false
+  },
+ 
+  "files":
+  [
+    {"includePattern": "build/libs/(.*)", "uploadPattern": "org/phoenixframework/javaphoenixclient/0.1.0/$1"}
+  ],
+  "publish": true
+}
