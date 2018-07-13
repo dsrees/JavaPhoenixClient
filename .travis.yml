@@ -1,0 +1,12 @@
+language: java
+jdk:
+- oraclejdk8
+sudo: false
+scrpt: gradle/travis_build.sh
+cache:
+  directories:
+  - "$HOME/.m2"
+  - "$HOME/.gradle"
+deploy:
+  key:
+    secure: jvY54GDpStgOcGsTqIewHmKIvuGd+Ku5Xfjy8J+i9ot2ngIZQrF6WeEy9/07AaKdMyVbHeKq2oJh/iFCzwh7bOQH3EatELPpKYHBPk6lQDJzFp8CHGJulLHi98ye2btraacsks19F5yuhihT3M7y5W0K8I3H9ZawozTldNxssO+1Wu+JULQZi46uaoTLyU0K5NGZYl8eLZQcN071u6JEqN+j+nZljnJxKdQUNsORUPpsCfJJWL3Am4ek5ZdSlhOj1Qt8o1MIhwr6dr7VuDoQCzbYOfpLMOb3a/4AVf/4Y/8Bjv6F7PGVY8SaC8P2ur1LTEgA/10nW7ymAFg1jeivC+lYnSOK193MBWqNuvsGfBsAxBwK/EU20SIijDWk61/+g/2Ut3swzOGja/4ozibnIEiVhPnm2+c03gJp0YCwLaeymVqDzpRQLGzfNgwxY6/F5yyKSziGQPFFW+zk4h+gjwa3K6Sd71Xb9u5doqblLGVKzaEslr1aUzXTe53i9kNrIOBFtpjjVUFNolrxiDpdMvJguWFpqv8/vQZEYZXSWMh+igkbIT6HdcskcNtRjlYbM+aTyeEflFdXBvIE+Z6/nortHlf6b6IH5HLvASrrHJ1Zn1vu1j0GUgBb2SR8l2b3y2GUjrR2DouX9H1ZhH3IvL1GQAPhjkUA09IU/ijREI4=
