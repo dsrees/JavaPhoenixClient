@@ -1,12 +1,16 @@
 package org.phoenixframework
 
-import android.net.Uri
-import com.clustertruck.consumer.common.api.type_adapter.GsonProvider
+import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
-import okhttp3.*
-import timber.log.Timber
+import com.google.gson.GsonBuilder
+import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import java.net.URL
-import java.util.*
+import java.util.Timer
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.concurrent.schedule
@@ -20,7 +24,7 @@ const val DEFAULT_TIMEOUT: Long = 10000
 const val DEFAULT_HEARTBEAT: Long = 30000
 
 class PhxSocket(
-        urlPath: String,
+        url: String,
         params: Payload? = null
 ) : WebSocketListener() {
 
@@ -77,7 +81,7 @@ class PhxSocket(
     private var ref: Int = 0
 
     /// Internal endpoint that the Socket is connecting to
-    private var endpoint: URL
+    var endpoint: URL
 
     /// Timer that triggers sending new Heartbeat messages
     private var heartbeatTimer: Timer? = null
@@ -89,27 +93,46 @@ class PhxSocket(
     private var reconnectTimer: PhxTimer? = null
 
 
-    private val gson: Gson = GsonProvider.gson
+    private val gson: Gson = GsonBuilder()
+            .setLenient()
+            .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+            .create()
+
     private val request: Request
     private val client: OkHttpClient
 
-    /// Websocket connection to the server
+    /// WebSocket connection to the server
     private var connection: WebSocket? = null
 
 
     init {
 
-        val builder = Uri.Builder().path(urlPath)
-        params?.let {
-            it.forEach { key, value ->
-                builder.appendQueryParameter(key, value.toString())
-            }
+        // Silently replace web socket URLs with HTTP URLs.
+        var mutableUrl = url
+        if (url.regionMatches(0, "ws:", 0, 3, ignoreCase = true)) {
+            mutableUrl = "http:" + url.substring(3)
+        } else if (url.regionMatches(0, "wss:", 0, 4, ignoreCase = true)) {
+            mutableUrl = "https:" + url.substring(4)
         }
 
-        val url = URL(builder.build().path)
-        this.endpoint = url
+        var httpUrl = HttpUrl.parse(mutableUrl) ?: throw IllegalArgumentException("invalid url: $url")
 
-        request = Request.Builder().url(url).build()
+        // If there are query params, append them now
+        params?.let {
+            val httpBuilder = httpUrl.newBuilder()
+            it.forEach { key, value ->
+                httpBuilder.addQueryParameter(key, value.toString())
+            }
+
+            httpUrl = httpBuilder.build()
+        }
+
+
+        // Hold reference to where the Socket is pointing to
+        this.endpoint = httpUrl.url()
+
+        // Create the request and client that will be used to connect to the WebSocket
+        request = Request.Builder().url(httpUrl).build()
         client = OkHttpClient.Builder().build()
     }
 
@@ -323,7 +346,6 @@ class PhxSocket(
 
     /** Triggers a message when an error comes through the Socket */
     private fun onConnectionError(t: Throwable?) {
-        Timber.e(t, "Error connection")
         this.logItems("Transport: error")
 
         // Inform all onError callbacks that an error occurred
