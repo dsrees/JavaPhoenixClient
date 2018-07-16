@@ -2,11 +2,10 @@ buildscript { repositories { jcenter() } }
 plugins {
     id 'java'
     id 'org.jetbrains.kotlin.jvm' version '1.2.51'
-    id "com.jfrog.bintray" version "1.8.4"
+    id 'nebula.project' version '4.0.1'
+    id "nebula.maven-publish" version "7.2.4"
+    id 'nebula.nebula-bintray' version '3.5.5'
 }
-
-apply plugin: "maven-publish"
-
 
 group 'com.github.dsrees'
 version '0.1.1'
@@ -28,6 +27,11 @@ dependencies {
 
 }
 
+sourceSets {
+    main.java.srcDirs += 'src/main/kotlin/'
+    test.java.srcDirs += 'src/test/kotlin/'
+}
+
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
@@ -35,21 +39,11 @@ compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-publishing {
-    publications {
-        JavaPhoenixClientJar(MavenPublication) {
-            from components.java
-            groupId 'com.github.dsrees'
-            artifactId 'JavaPhoenixClient'
-            version project.version
-        }
-    }
-}
-
 bintray {
     user = System.getenv('BINTRAY_USER')
     key = System.getenv('BINTRAY_API_KEY')
-
+    dryRun = false
+    publish = true
     pkg {
         repo = 'java-phoenix-client'
         name = 'JavaPhoenixClient'
@@ -58,7 +52,11 @@ bintray {
         issueTrackerUrl = 'https://github.com/dsrees/JavaPhoenixClient/issues'
         vcsUrl = 'https://github.com/dsrees/JavaPhoenixClient.git'
         licenses = ['MIT']
+        version {
+            name = project.version
+            vcsTag = project.version
+        }
     }
-    publications = ['JavaPhoenixClientJar']
+    publications = ['nebula']
 }
 
