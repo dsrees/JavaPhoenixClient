@@ -1,7 +1,12 @@
+buildscript { repositories { jcenter() } }
 plugins {
     id 'java'
     id 'org.jetbrains.kotlin.jvm' version '1.2.51'
+    id "com.jfrog.bintray" version "1.8.4"
 }
+
+apply plugin: "maven-publish"
+
 
 group 'com.github.dsrees'
 version '0.1.0'
@@ -29,3 +34,31 @@ compileKotlin {
 compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
+
+publishing {
+    publications {
+        JavaPhoenixClientJar(MavenPublication) {
+            from components.java
+            groupId 'com.github.dsrees'
+            artifactId 'JavaPhoenixClient'
+            version project.version
+        }
+    }
+}
+
+bintray {
+    user = System.getenv('BINTRAY_USER')
+    key = System.getenv('BINTRAY_API_KEY')
+
+    pkg {
+        repo = 'java-phoenix-client'
+        name = 'JavaPhoenixClient'
+        userOrg = user
+        websiteUrl = 'https://github.com/dsrees/JavaPhoenixClient'
+        issueTrackerUrl = 'https://github.com/dsrees/JavaPhoenixClient/issues'
+        vcsUrl = 'https://github.com/dsrees/JavaPhoenixClient.git'
+        licenses = ['MIT']
+    }
+    publications = ['JavaPhoenixClientJar']
+}
+
