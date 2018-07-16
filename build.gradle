@@ -27,11 +27,6 @@ dependencies {
 
 }
 
-sourceSets {
-    main.java.srcDirs += 'src/main/kotlin/'
-    test.java.srcDirs += 'src/test/kotlin/'
-}
-
 compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
@@ -42,7 +37,7 @@ compileTestKotlin {
 bintray {
     user = System.getenv('BINTRAY_USER')
     key = System.getenv('BINTRAY_API_KEY')
-    dryRun = false
+    dryRun = true
     publish = true
     pkg {
         repo = 'java-phoenix-client'
