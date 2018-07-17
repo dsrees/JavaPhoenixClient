@@ -23,7 +23,7 @@ const val DEFAULT_TIMEOUT: Long = 10000
 /** Default heartbeat interval set to 30s */
 const val DEFAULT_HEARTBEAT: Long = 30000
 
-class PhxSocket(
+open class PhxSocket(
         url: String,
         params: Payload? = null
 ) : WebSocketListener() {
@@ -259,7 +259,7 @@ class PhxSocket(
     /**
      * Sends data through the Socket
      */
-    public fun push(topic: String,
+    public open fun push(topic: String,
                     event: String,
                     payload: Payload,
                     ref: String? = null,
@@ -295,7 +295,7 @@ class PhxSocket(
     /**
      * @return the next message ref, accounting for overflows
      */
-    public fun makeRef(): String {
+    public open fun makeRef(): String {
         val newRef = this.ref + 1
         this.ref = if (newRef == Int.MAX_VALUE) 0 else newRef
 
@@ -363,7 +363,7 @@ class PhxSocket(
 
         // Dispatch the message to all channels that belong to the topic
         this.channels
-                .filter { it.isMemeber(message) }
+                .filter { it.isMember(message) }
                 .forEach { it.trigger(message) }
 
         // Inform all onMessage callbacks of the message

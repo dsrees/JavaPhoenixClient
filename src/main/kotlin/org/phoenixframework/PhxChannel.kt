@@ -5,7 +5,7 @@ import java.lang.IllegalStateException
 
 class PhxChannel(
         val topic: String,
-        var params: Payload,
+        val params: Payload,
         val socket: PhxSocket
 ) {
 
@@ -60,7 +60,7 @@ class PhxChannel(
         this.state = PhxChannel.PhxState.CLOSED
         this.bindings = ArrayList()
         this.bindingRef = 0
-        this.timeout = DEFAULT_TIMEOUT
+        this.timeout = socket.timeout
         this.joinedOnce = false
         this.pushBuffer = ArrayList()
         this.joinPush = PhxPush(this,
@@ -220,7 +220,7 @@ class PhxChannel(
         // Remove any subscriptions that match the given event and ref ID. If no ref
         // ID is given, then remove all subscriptions for an event.
         this.bindings = bindings
-                .filter { it.first == event && (ref == null || ref == it.second) }
+                .filterNot { it.first == event && (ref == null || ref == it.second) }
                 .toMutableList()
     }
 
@@ -300,7 +300,7 @@ class PhxChannel(
     // Internal
     //------------------------------------------------------------------------------
     /** Checks if an event received by the socket belongs to the Channel */
-    fun isMemeber(message: PhxMessage): Boolean {
+    fun isMember(message: PhxMessage): Boolean {
         if (message.topic != this.topic) { return false }
 
         val isLifecycleEvent = PhxEvent.isLifecycleEvent(message.event)
