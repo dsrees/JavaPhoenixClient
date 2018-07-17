@@ -8,7 +8,7 @@ plugins {
 }
 
 group 'com.github.dsrees'
-version '0.1.1'
+version '0.1.0'
 
 sourceCompatibility = 1.8
 
@@ -37,7 +37,7 @@ compileTestKotlin {
 bintray {
     user = System.getenv('BINTRAY_USER')
     key = System.getenv('BINTRAY_API_KEY')
-    dryRun = true
+    dryRun = false
     publish = true
     pkg {
         repo = 'java-phoenix-client'
