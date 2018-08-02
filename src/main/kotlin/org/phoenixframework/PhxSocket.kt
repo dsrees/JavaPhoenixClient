@@ -39,7 +39,7 @@ open class PhxSocket(
 
     /** Interval between socket reconnect attempts */
     public var reconnectAfterMs: ((tries: Int) -> Long) = closure@{
-        return@closure if (it > 3) 100000 else longArrayOf(1000, 2000, 5000)[it]
+        return@closure if (it >= 3) 100000 else longArrayOf(1000, 2000, 5000)[it]
     }
 
     /** Hook for custom logging into the client */
