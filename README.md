@@ -15,7 +15,7 @@ fun connectToChatRoom() {
 
     // Create the Socket
     val params = hashMapOf("token" to "abc123")
-    val socket = PhxSocket("http://localhost:4000/socket/websocket", multipleParams
+    val socket = PhxSocket("http://localhost:4000/socket/websocket", multipleParams)
 
     // Listen to events on the Socket
     socket.logger = { Log.d("TAG", it) }
@@ -36,6 +36,19 @@ fun connectToChatRoom() {
             .receive("ok") { /* Joined the chatroom */ }
             .receive("error") { /* failed to join the chatroom */ }
 }
+```
+
+You can also inject your own OkHttp Client into the Socket to provide your own configuration
+```kotlin
+// Create the Socket with a pre-configured OkHttp Client
+val client = OkHttpClient.Builder()
+    .connectTimeout(1000, TimeUnit.MILLISECONDS)
+    .build()
+    
+val params = hashMapOf("token" to "abc123")
+val socket = PhxSocket("http://localhost:4000/socket/websocket", 
+                       multipleParams,
+                       client)
 ```
 
 
