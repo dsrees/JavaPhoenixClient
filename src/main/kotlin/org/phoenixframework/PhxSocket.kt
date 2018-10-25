@@ -25,7 +25,8 @@ const val DEFAULT_HEARTBEAT: Long = 30000
 
 open class PhxSocket(
         url: String,
-        params: Payload? = null
+        params: Payload? = null,
+        private val client: OkHttpClient = OkHttpClient.Builder().build()
 ) : WebSocketListener() {
 
     //------------------------------------------------------------------------------
@@ -99,7 +100,6 @@ open class PhxSocket(
             .create()
 
     private val request: Request
-    private val client: OkHttpClient
 
     /// WebSocket connection to the server
     private var connection: WebSocket? = null
@@ -133,7 +133,6 @@ open class PhxSocket(
 
         // Create the request and client that will be used to connect to the WebSocket
         request = Request.Builder().url(httpUrl).build()
-        client = OkHttpClient.Builder().build()
     }
 
 
@@ -353,6 +352,12 @@ open class PhxSocket(
 
         // Inform all channels that a socket error occurred
         this.triggerChannelError()
+
+        // There was an error, violently cancel the connection. This is a safe operation
+        // since the underlying WebSocket will no longer return messages to the Connection
+        // after a Failure
+        connection?.cancel()
+        connection = null
     }
 
     /** Triggers a message to the correct Channel when it comes through the Socket */
