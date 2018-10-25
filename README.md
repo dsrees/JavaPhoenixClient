@@ -21,7 +21,7 @@ fun connectToChatRoom() {
     socket.logger = { Log.d("TAG", it) }
     socket.onOpen { Log.d("TAG", "Socket Opened") }
     socket.onClose { Log.d("TAG", "Socket Closed") }
-    socket.onError { Log.d(it, "TAG", "Socket Error") }
+    socket.onError { throwable, response -> Log.d(throwable, "TAG", "Socket Error ${response?.code}") }
 
     socket.connect()
 
