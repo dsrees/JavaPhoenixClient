@@ -67,7 +67,7 @@ open class PhxSocket(
     private var onCloseCallbacks: MutableList<() -> Unit> = ArrayList()
 
     /// Collection of callbacks for onError socket events
-    private var onErrorCallbacks: MutableList<(Throwable?) -> Unit> = ArrayList()
+    private var onErrorCallbacks: MutableList<(Throwable, Response?) -> Unit> = ArrayList()
 
     /// Collection of callbacks for onMessage socket events
     private var onMessageCallbacks: MutableList<(PhxMessage) -> Unit> = ArrayList()
@@ -196,13 +196,13 @@ open class PhxSocket(
      * Registers a callback for connection error events
      *
      * Example:
-     *     socket.onError { [unowned self] (error) in
+     *     socket.onError { error, response ->
      *         print("Socket Connection Error")
      *     }
      *
      * @param callback: Callback to register
      */
-    public fun onError(callback: (Throwable?) -> Unit) {
+    public fun onError(callback: (Throwable?, Response?) -> Unit) {
         this.onErrorCallbacks.add(callback)
     }
 
@@ -344,11 +344,11 @@ open class PhxSocket(
     }
 
     /** Triggers a message when an error comes through the Socket */
-    private fun onConnectionError(t: Throwable?) {
+    private fun onConnectionError(t: Throwable, response: Response?) {
         this.logItems("Transport: error")
 
         // Inform all onError callbacks that an error occurred
-        this.onErrorCallbacks.forEach { it(t) }
+        this.onErrorCallbacks.forEach { it(t, response) }
 
         // Inform all channels that a socket error occurred
         this.triggerChannelError()
@@ -439,7 +439,7 @@ open class PhxSocket(
         this.onConnectionClosed()
     }
 
-    override fun onFailure(webSocket: WebSocket?, t: Throwable?, response: Response?) {
-        this.onConnectionError(t)
+    override fun onFailure(webSocket: WebSocket?, t: Throwable, response: Response?) {
+        this.onConnectionError(t, response)
     }
 }
