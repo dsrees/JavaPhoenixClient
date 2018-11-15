@@ -120,7 +120,7 @@ open class PhxSocket(
         // If there are query params, append them now
         params?.let {
             val httpBuilder = httpUrl.newBuilder()
-            it.forEach { key, value ->
+            it.forEach { (key, value) ->
                 httpBuilder.addQueryParameter(key, value.toString())
             }
 
