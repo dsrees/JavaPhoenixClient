@@ -7,15 +7,15 @@ data class PhxMessage(
         @SerializedName("ref")
         val ref: String = "",
 
-        /** Property "topic" is never used */
+        /** The message topic */
         @SerializedName("topic")
         val topic: String = "",
 
-        /** Property "topic" is never used */
+        /** The message event name, for example "phx_join" or any other custom name */
         @SerializedName("event")
         val event: String = "",
 
-        /** Property "topic" is never used */
+        /** The payload of the message */
         @SerializedName("payload")
         val payload: Payload = HashMap(),
 
