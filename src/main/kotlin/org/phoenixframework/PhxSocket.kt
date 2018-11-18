@@ -265,7 +265,7 @@ open class PhxSocket(
                   joinRef: String? = null) {
 
         val callback: (() -> Unit) = {
-            var body: MutableMap<String, Any> = HashMap()
+            val body: MutableMap<String, Any> = HashMap()
             body["topic"] = topic
             body["event"] = event
             body["payload"] = payload
