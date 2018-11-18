@@ -2,7 +2,7 @@ package org.phoenixframework
 
 import com.google.gson.annotations.SerializedName
 
-class PhxMessage(
+data class PhxMessage(
         /** The unique string ref. Empty if not present */
         @SerializedName("ref")
         val ref: String = "",
@@ -30,10 +30,4 @@ class PhxMessage(
      */
     val status: String?
         get() = payload["status"] as? String
-
-
-    override fun toString(): String {
-        return "Message(ref='$ref', joinRef=$joinRef, topic='$topic', event='$event', payload=$payload)"
-    }
-
 }
