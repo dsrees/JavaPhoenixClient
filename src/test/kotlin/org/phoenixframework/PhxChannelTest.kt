@@ -125,4 +125,3 @@ class PhxChannelTest {
         assertThat(bCalled).isTrue()
     }
 }
-
