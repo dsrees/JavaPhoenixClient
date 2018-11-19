@@ -37,7 +37,7 @@ compileTestKotlin {
 
 bintray {
     user = System.getenv('bintrayUser')
-    key = System.getenv('bintrayKey')
+    key = System.getenv('bintrayApiKey')
     dryRun = false
     publish = true
     pkg {
