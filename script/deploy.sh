@@ -2,7 +2,7 @@
 # This script will build the project.
 
 if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then
-  echo -e "Build Pull Request #$TRAVIS_PULL_REQUEST => Branch [$TRAVIS_BRANCH]"
+  echo -e "======> Build Pull Request #$TRAVIS_PULL_REQUEST => Branch [$TRAVIS_BRANCH] <======"
   ./gradlew build
 elif [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_TAG" == "" ]; then
   echo -e 'Build Branch with Snapshot => Branch ['$TRAVIS_BRANCH']'
