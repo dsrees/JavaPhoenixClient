@@ -1,6 +1,8 @@
 package org.phoenixframework
 
 import java.lang.IllegalStateException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 
 class PhxChannel(
@@ -44,7 +46,7 @@ class PhxChannel(
 
 
     var state: PhxChannel.PhxState
-    var bindings: MutableList<Triple<String, Int, (PhxMessage) -> Unit>>
+    var bindings: ConcurrentHashMap<String, ConcurrentLinkedQueue<Pair<Int, (PhxMessage) -> Unit>>>
     var bindingRef: Int
     var timeout: Long
     var joinedOnce: Boolean
@@ -58,7 +60,7 @@ class PhxChannel(
 
     init {
         this.state = PhxChannel.PhxState.CLOSED
-        this.bindings = ArrayList()
+        this.bindings = ConcurrentHashMap()
         this.bindingRef = 0
         this.timeout = socket.timeout
         this.joinedOnce = false
@@ -197,7 +199,9 @@ class PhxChannel(
         val ref = bindingRef
         this.bindingRef = ref + 1
 
-        this.bindings.add(Triple(event, ref, callback))
+        this.bindings.getOrPut(event) { ConcurrentLinkedQueue() }
+                .add(ref to callback)
+
         return ref
     }
 
@@ -219,9 +223,11 @@ class PhxChannel(
     public fun off(event: String, ref: Int? = null) {
         // Remove any subscriptions that match the given event and ref ID. If no ref
         // ID is given, then remove all subscriptions for an event.
-        this.bindings = bindings
-                .filterNot { it.first == event && (ref == null || ref == it.second) }
-                .toMutableList()
+        if (ref != null) {
+            this.bindings[event]?.removeIf{ ref == it.first }
+        } else {
+            this.bindings.remove(event)
+        }
     }
 
     /**
@@ -333,9 +339,7 @@ class PhxChannel(
      */
     fun trigger(message: PhxMessage) {
         val handledMessage = onMessage(message)
-        this.bindings
-                .filter { it.first == message.event  }
-                .forEach { it.third(handledMessage) }
+        this.bindings[message.event]?.forEach { it.second(handledMessage) }
     }
 
     /**
