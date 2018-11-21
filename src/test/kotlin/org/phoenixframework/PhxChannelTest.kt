@@ -6,6 +6,8 @@ import org.junit.Test
 import org.mockito.Mockito
 import org.mockito.MockitoAnnotations
 import org.mockito.Spy
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 class PhxChannelTest {
 
@@ -123,5 +125,28 @@ class PhxChannelTest {
 
         assertThat(aCalled).isFalse()
         assertThat(bCalled).isTrue()
+    }
+
+    @Test
+    fun `Issue 22`() {
+        // This reproduces a concurrent modification exception.  The original cause is most likely as follows:
+        // 1.  Push (And receive) messages very quickly
+        // 2.  PhxChannel.push, calls PhxPush.send()
+        // 3.  PhxPush calls startTimeout().
+        // 4.  PhxPush.startTimeout() calls this.channel.on(refEvent) - This modifies the bindings list
+        // 5.  any trigger (possibly from a timeout) can be iterating through the binding list that was modified in step 4.
+
+        val f1 = CompletableFuture.runAsync {
+            for (i in 0..1000) {
+                channel.on("event-$i") { /** do nothing **/ }
+            }
+        }
+        val f3 = CompletableFuture.runAsync {
+            for (i in 0..1000) {
+                channel.trigger(PhxMessage(event = "event-$i", ref = defaultRef))
+            }
+        }
+
+        CompletableFuture.allOf(f1, f3).get(10, TimeUnit.SECONDS)
     }
 }
