@@ -46,7 +46,7 @@ class PhxChannel(
 
 
     var state: PhxChannel.PhxState
-    var bindings: ConcurrentHashMap<String, ConcurrentLinkedQueue<Pair<Int, (PhxMessage) -> Unit>>>
+    val bindings: ConcurrentHashMap<String, ConcurrentLinkedQueue<Pair<Int, (PhxMessage) -> Unit>>>
     var bindingRef: Int
     var timeout: Long
     var joinedOnce: Boolean
