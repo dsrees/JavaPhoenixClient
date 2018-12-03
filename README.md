@@ -74,8 +74,5 @@ dependencies {
 Please submit in issue if you have any problems!
 
 
-
 This library is built to mirror the [phoenix.js](https://hexdocs.pm/phoenix/js/) and [SwiftPhoenixClient](https://github.com/davidstump/SwiftPhoenixClient) libraries.
-
-
 
