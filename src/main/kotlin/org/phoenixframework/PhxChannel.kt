@@ -136,7 +136,7 @@ class PhxChannel(
      * @param timeout: Overrides the default timeout
      * @return Push which receive hooks can be applied to
      */
-    public fun join(joinParams: Payload? = null, timeout: Long? = null): PhxPush {
+    fun join(joinParams: Payload? = null, timeout: Long? = null): PhxPush {
         if (joinedOnce) {
             throw IllegalStateException("Tried to join channel multiple times. `join()` can only be called once per channel")
         }
@@ -156,7 +156,7 @@ class PhxChannel(
      * @param callback: Callback to be informed when the channel closes
      * @return the ref counter of the subscription
      */
-    public fun onClose(callback: (msg: PhxMessage) -> Unit): Int {
+    fun onClose(callback: (msg: PhxMessage) -> Unit): Int {
         return this.on(PhxEvent.CLOSE, callback)
     }
 
@@ -166,14 +166,14 @@ class PhxChannel(
      * @param callback: Callback to be informed when the channel errors
      * @return the ref counter of the subscription
      */
-    public fun onError(callback: (msg: PhxMessage) -> Unit): Int {
+    fun onError(callback: (msg: PhxMessage) -> Unit): Int {
         return this.on(PhxEvent.ERROR, callback)
     }
 
     /**
      * Convenience method to take the Channel.Event enum. Same as channel.on(string)
      */
-    public fun on(event: PhxChannel.PhxEvent, callback: (PhxMessage) -> Unit): Int {
+    fun on(event: PhxChannel.PhxEvent, callback: (PhxMessage) -> Unit): Int {
         return this.on(event.value, callback)
     }
 
@@ -195,7 +195,7 @@ class PhxChannel(
      * @param callback: Receives payload of the event
      * @return: The subscriptions ref counter
      */
-    public fun on(event: String, callback: (PhxMessage) -> Unit): Int {
+    fun on(event: String, callback: (PhxMessage) -> Unit): Int {
         val ref = bindingRef
         this.bindingRef = ref + 1
 
@@ -220,7 +220,7 @@ class PhxChannel(
      * @param event: Event to unsubscribe from
      * @param ref: Optional. Ref counter returned when subscribed to event
      */
-    public fun off(event: String, ref: Int? = null) {
+    fun off(event: String, ref: Int? = null) {
         // Remove any subscriptions that match the given event and ref ID. If no ref
         // ID is given, then remove all subscriptions for an event.
         if (ref != null) {
@@ -238,7 +238,7 @@ class PhxChannel(
      * @param timeout: Optional timeout. Default will be used
      * @return [PhxPush] that can be hooked into
      */
-    public fun push(event: String, payload: Payload, timeout: Long = DEFAULT_TIMEOUT): PhxPush {
+    fun push(event: String, payload: Payload, timeout: Long = DEFAULT_TIMEOUT): PhxPush {
         if (!joinedOnce) {
             // If the Channel has not been joined, throw an exception
             throw RuntimeException("Tried to push $event to $topic before joining. Use channel.join() before pushing events")
@@ -269,7 +269,7 @@ class PhxChannel(
      *
      * @param timeout: Optional timeout. Default will be used
      */
-    public fun leave(timeout: Long = DEFAULT_TIMEOUT): PhxPush {
+    fun leave(timeout: Long = DEFAULT_TIMEOUT): PhxPush {
         this.state = PhxState.LEAVING
 
         val onClose: ((PhxMessage) -> Unit) = {
@@ -297,7 +297,7 @@ class PhxChannel(
      * @param callback: Callback which will receive the inbound message before
      * it is dispatched to other callbacks. Must return a Message object.
      */
-    public fun onMessage(callback: (message: PhxMessage) -> PhxMessage) {
+    fun onMessage(callback: (message: PhxMessage) -> PhxMessage) {
         this.onMessage = callback
     }
 

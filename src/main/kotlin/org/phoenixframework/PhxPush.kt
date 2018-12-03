@@ -138,9 +138,7 @@ class PhxPush(
      * in milliseconds is reached.
      */
     fun startTimeout() {
-        this.timeoutTimer?.let {
-            it.cancel()
-        }
+        this.timeoutTimer?.cancel()
 
         val ref = this.channel.socket.makeRef()
         this.ref = ref

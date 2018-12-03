@@ -150,4 +150,3 @@ class PhxChannelTest {
         CompletableFuture.allOf(f1, f3).get(10, TimeUnit.SECONDS)
     }
 }
-

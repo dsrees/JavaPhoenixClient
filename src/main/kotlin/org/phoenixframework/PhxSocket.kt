@@ -33,28 +33,28 @@ open class PhxSocket(
     // Public Attributes
     //------------------------------------------------------------------------------
     /** Timeout to use when opening connections */
-    public var timeout: Long = DEFAULT_TIMEOUT
+    var timeout: Long = DEFAULT_TIMEOUT
 
     /** Interval between sending a heartbeat */
-    public var heartbeatIntervalMs: Long = DEFAULT_HEARTBEAT
+    var heartbeatIntervalMs: Long = DEFAULT_HEARTBEAT
 
     /** Interval between socket reconnect attempts */
-    public var reconnectAfterMs: ((tries: Int) -> Long) = closure@{
+    var reconnectAfterMs: ((tries: Int) -> Long) = closure@{
         return@closure if (it >= 3) 100000 else longArrayOf(1000, 2000, 5000)[it]
     }
 
     /** Hook for custom logging into the client */
-    public var logger: ((msg: String) -> Unit)? = null
+    var logger: ((msg: String) -> Unit)? = null
 
     /** Disable sending Heartbeats by setting to true */
-    public var skipHeartbeat: Boolean = false
+    var skipHeartbeat: Boolean = false
 
     /**
      * Socket will attempt to reconnect if the Socket was closed. Will not
      * reconnect if the Socket errored (e.g. connection refused.) Default
      * is set to true
      */
-    public var autoReconnect: Boolean = true
+    var autoReconnect: Boolean = true
 
 
     //------------------------------------------------------------------------------
@@ -140,13 +140,13 @@ open class PhxSocket(
     // Public
     //------------------------------------------------------------------------------
     /** True if the Socket is currently connected */
-    public val isConnected: Boolean
+    val isConnected: Boolean
         get() = connection != null
 
     /**
      * Disconnects the Socket
      */
-    public fun disconnect() {
+    fun disconnect() {
         connection?.close(1000, null)
         connection = null
 
@@ -157,7 +157,7 @@ open class PhxSocket(
      * will be sent through the connection. If the Socket is already connected,
      * then this call will be ignored.
      */
-    public fun connect() {
+    fun connect() {
         // Do not attempt to reconnect if already connected
         if (isConnected) return
         connection = client.newWebSocket(request, this)
@@ -173,7 +173,7 @@ open class PhxSocket(
      *
      * @param callback: Callback to register
      */
-    public fun onOpen(callback: () -> Unit) {
+    fun onOpen(callback: () -> Unit) {
         this.onOpenCallbacks.add(callback)
     }
 
@@ -188,7 +188,7 @@ open class PhxSocket(
      *
      * @param callback: Callback to register
      */
-    public fun onClose(callback: () -> Unit) {
+    fun onClose(callback: () -> Unit) {
         this.onCloseCallbacks.add(callback)
     }
 
@@ -202,7 +202,7 @@ open class PhxSocket(
      *
      * @param callback: Callback to register
      */
-    public fun onError(callback: (Throwable?, Response?) -> Unit) {
+    fun onError(callback: (Throwable?, Response?) -> Unit) {
         this.onErrorCallbacks.add(callback)
     }
 
@@ -216,7 +216,7 @@ open class PhxSocket(
      *
      * @param callback: Callback to register
      */
-    public fun onMessage(callback: (PhxMessage) -> Unit) {
+    fun onMessage(callback: (PhxMessage) -> Unit) {
         this.onMessageCallbacks.add(callback)
     }
 
@@ -226,7 +226,7 @@ open class PhxSocket(
      * call this method when you are finished when the Socket in order to release
      * any references held by the socket.
      */
-    public fun removeAllCallbacks() {
+    fun removeAllCallbacks() {
         this.onOpenCallbacks.clear()
         this.onCloseCallbacks.clear()
         this.onErrorCallbacks.clear()
@@ -237,7 +237,7 @@ open class PhxSocket(
      * Removes the Channel from the socket. This does not cause the channel to inform
      * the server that it is leaving so you should call channel.leave() first.
      */
-    public fun remove(channel: PhxChannel) {
+    fun remove(channel: PhxChannel) {
         this.channels = channels
                 .filter { it.joinRef != channel.joinRef }
                 .toMutableList()
@@ -249,7 +249,7 @@ open class PhxSocket(
      * Example:
      *  val channel = socket.channel("rooms", params)
      */
-    public fun channel(topic: String, params: Payload? = null): PhxChannel {
+    fun channel(topic: String, params: Payload? = null): PhxChannel {
         val channel = PhxChannel(topic, params ?: HashMap(), this)
         this.channels.add(channel)
         return channel
@@ -258,14 +258,14 @@ open class PhxSocket(
     /**
      * Sends data through the Socket
      */
-    public open fun push(topic: String,
-                    event: String,
-                    payload: Payload,
-                    ref: String? = null,
-                    joinRef: String? = null) {
+    open fun push(topic: String,
+                  event: String,
+                  payload: Payload,
+                  ref: String? = null,
+                  joinRef: String? = null) {
 
         val callback: (() -> Unit) = {
-            var body: MutableMap<String, Any> = HashMap()
+            val body: MutableMap<String, Any> = HashMap()
             body["topic"] = topic
             body["event"] = event
             body["payload"] = payload
@@ -294,7 +294,7 @@ open class PhxSocket(
     /**
      * @return the next message ref, accounting for overflows
      */
-    public open fun makeRef(): String {
+    open fun makeRef(): String {
         val newRef = this.ref + 1
         this.ref = if (newRef == Int.MAX_VALUE) 0 else newRef
 
