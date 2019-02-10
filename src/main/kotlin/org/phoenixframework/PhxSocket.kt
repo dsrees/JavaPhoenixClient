@@ -127,6 +127,14 @@ open class PhxSocket(
             httpUrl = httpBuilder.build()
         }
 
+        reconnectTimer = PhxTimer(
+            callback = {
+                disconnect().also {
+                    connect()
+                }
+            },
+            timerCalculation = reconnectAfterMs
+        )
 
         // Hold reference to where the Socket is pointing to
         this.endpoint = httpUrl.url()
