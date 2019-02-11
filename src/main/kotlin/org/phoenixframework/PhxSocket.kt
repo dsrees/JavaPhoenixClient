@@ -23,6 +23,9 @@ const val DEFAULT_TIMEOUT: Long = 10000
 /** Default heartbeat interval set to 30s */
 const val DEFAULT_HEARTBEAT: Long = 30000
 
+/** The code used when the socket was closed without error */
+const val WS_CLOSE_NORMAL = 1000
+
 open class PhxSocket(
         url: String,
         params: Payload? = null,
@@ -155,7 +158,7 @@ open class PhxSocket(
      * Disconnects the Socket
      */
     fun disconnect() {
-        connection?.close(1000, null)
+        connection?.close(WS_CLOSE_NORMAL, null)
         connection = null
 
     }
@@ -337,15 +340,16 @@ open class PhxSocket(
     }
 
     /** Triggers a message when the socket is closed */
-    private fun onConnectionClosed() {
+    private fun onConnectionClosed(code: Int) {
         this.logItems("Transport: close")
         this.triggerChannelError()
 
         // Terminate any ongoing heartbeats
         this.heartbeatTimer?.cancel()
 
-        // Attempt to reconnect the socket
-        if (autoReconnect) reconnectTimer?.scheduleTimeout()
+        // Attempt to reconnect the socket. If the socket was closed normally,
+        // then do not attempt to reconnect
+        if (autoReconnect && code != WS_CLOSE_NORMAL) reconnectTimer?.scheduleTimeout()
 
         // Inform all onClose callbacks that the Socket closed
         this.onCloseCallbacks.forEach { it() }
@@ -444,7 +448,7 @@ open class PhxSocket(
     }
 
     override fun onClosed(webSocket: WebSocket?, code: Int, reason: String?) {
-        this.onConnectionClosed()
+        this.onConnectionClosed(code)
     }
 
     override fun onFailure(webSocket: WebSocket?, t: Throwable, response: Response?) {
