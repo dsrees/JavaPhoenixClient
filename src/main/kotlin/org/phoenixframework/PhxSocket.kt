@@ -26,6 +26,9 @@ const val DEFAULT_HEARTBEAT: Long = 30000
 /** The code used when the socket was closed without error */
 const val WS_CLOSE_NORMAL = 1000
 
+/** The code used when the socket was closed after the heartbeat timer timed out */
+const val WS_CLOSE_HEARTBEAT_ERROR = 5000
+
 open class PhxSocket(
         url: String,
         params: Payload? = null,
@@ -157,7 +160,7 @@ open class PhxSocket(
     /**
      * Disconnects the Socket
      */
-    fun disconnect() {
+    fun disconnect(code: Int = WS_CLOSE_NORMAL) {
         connection?.close(WS_CLOSE_NORMAL, null)
         connection = null
 
@@ -423,7 +426,7 @@ open class PhxSocket(
             pendingHeartbeatRef?.let {
                 pendingHeartbeatRef = null
                 logItems("Transport: Heartbeat timeout. Attempt to re-establish connection")
-                disconnect()
+                disconnect(WS_CLOSE_HEARTBEAT_ERROR)
                 return@schedule
             }
 
