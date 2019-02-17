@@ -185,7 +185,7 @@ class PhxPush(
         mutPayload["status"] = status
 
         refEvent?.let {
-            val message = PhxMessage(it, "", "", mutPayload)
+            val message = PhxMessage(it, "", it, mutPayload)
             this.channel.trigger(message)
         }
     }
