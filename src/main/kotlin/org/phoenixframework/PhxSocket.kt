@@ -99,7 +99,6 @@ open class PhxSocket(
     /// Timer to use when attempting to reconnect
     private var reconnectTimer: PhxTimer? = null
 
-
     private val gson: Gson = GsonBuilder()
             .setLenient()
             .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
@@ -154,8 +153,8 @@ open class PhxSocket(
     // Public
     //------------------------------------------------------------------------------
     /** True if the Socket is currently connected */
-    val isConnected: Boolean
-        get() = connection != null
+    var isConnected: Boolean = false
+        private set
 
     /**
      * Disconnects the Socket
@@ -173,7 +172,7 @@ open class PhxSocket(
      */
     fun connect() {
         // Do not attempt to reconnect if already connected
-        if (isConnected) return
+        if (connection != null) return
         connection = client.newWebSocket(request, this)
     }
 
@@ -440,6 +439,7 @@ open class PhxSocket(
     // WebSocketListener
     //------------------------------------------------------------------------------
     override fun onOpen(webSocket: WebSocket?, response: Response?) {
+        isConnected = true
         this.onConnectionOpened()
 
     }
@@ -451,10 +451,12 @@ open class PhxSocket(
     }
 
     override fun onClosed(webSocket: WebSocket?, code: Int, reason: String?) {
+        isConnected = false
         this.onConnectionClosed(code)
     }
 
     override fun onFailure(webSocket: WebSocket?, t: Throwable, response: Response?) {
+        isConnected = false
         this.onConnectionError(t, response)
     }
 }
