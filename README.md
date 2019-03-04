@@ -65,7 +65,7 @@ repositories {
 and then add the library. See [releases](https://github.com/dsrees/JavaPhoenixClient/releases) for the latest version
 ```$xslt
 dependencies {
-    implementation 'com.github.dsrees:JavaPhoenixClient:0.1.7'
+    implementation 'com.github.dsrees:JavaPhoenixClient:0.1.8'
 }
 ```
 
