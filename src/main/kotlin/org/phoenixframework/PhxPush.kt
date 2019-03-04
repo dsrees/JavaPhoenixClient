@@ -184,8 +184,8 @@ class PhxPush(
         val mutPayload = payload.toMutableMap()
         mutPayload["status"] = status
 
-        refEvent?.let {
-            val message = PhxMessage(it, "", it, mutPayload)
+        refEvent?.let { safeRefEvent ->
+            val message = PhxMessage(event = safeRefEvent, payload = mutPayload)
             this.channel.trigger(message)
         }
     }
