@@ -1,10 +1,10 @@
 buildscript { repositories { jcenter() } }
 plugins {
-    id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.2.51'
-    id 'nebula.project' version '4.0.1'
-    id "nebula.maven-publish" version "7.2.4"
-    id 'nebula.nebula-bintray' version '3.5.5'
+  id 'java'
+  id 'org.jetbrains.kotlin.jvm' version '1.2.51'
+  id 'nebula.project' version '4.0.1'
+  id "nebula.maven-publish" version "7.2.4"
+  id 'nebula.nebula-bintray' version '3.5.5'
 }
 
 group 'com.github.dsrees'
@@ -13,45 +13,45 @@ version '0.1.8'
 sourceCompatibility = 1.8
 
 repositories {
-    mavenCentral()
+  mavenCentral()
 }
 
 dependencies {
-    compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    compile "com.google.code.gson:gson:2.8.5"
-    compile "com.squareup.okhttp3:okhttp:3.10.0"
+  compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+  compile "com.google.code.gson:gson:2.8.5"
+  compile "com.squareup.okhttp3:okhttp:3.10.0"
 
 
-    testCompile group: 'junit', name: 'junit', version: '4.12'
-    testCompile group: 'com.google.truth', name: 'truth', version: '0.42'
-    testCompile group: 'org.mockito', name: 'mockito-core', version: '2.19.1'
-
+  testCompile group: 'junit', name: 'junit', version: '4.12'
+  testCompile group: 'com.google.truth', name: 'truth', version: '0.42'
+  testCompile group: 'org.mockito', name: 'mockito-core', version: '2.19.1'
+  testCompile group: 'com.nhaarman.mockitokotlin2', name: 'mockito-kotlin', version: '2.1.0'
 }
 
 compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+  kotlinOptions.jvmTarget = "1.8"
 }
 compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+  kotlinOptions.jvmTarget = "1.8"
 }
 
 bintray {
-    user = System.getenv('bintrayUser')
-    key = System.getenv('bintrayApiKey')
-    dryRun = false
-    publish = true
-    pkg {
-        repo = 'java-phoenix-client'
-        name = 'JavaPhoenixClient'
-        userOrg = user
-        websiteUrl = 'https://github.com/dsrees/JavaPhoenixClient'
-        issueTrackerUrl = 'https://github.com/dsrees/JavaPhoenixClient/issues'
-        vcsUrl = 'https://github.com/dsrees/JavaPhoenixClient.git'
-        licenses = ['MIT']
-        version {
-            name = project.version
-            vcsTag = project.version
-        }
+  user = System.getenv('bintrayUser')
+  key = System.getenv('bintrayApiKey')
+  dryRun = false
+  publish = true
+  pkg {
+    repo = 'java-phoenix-client'
+    name = 'JavaPhoenixClient'
+    userOrg = user
+    websiteUrl = 'https://github.com/dsrees/JavaPhoenixClient'
+    issueTrackerUrl = 'https://github.com/dsrees/JavaPhoenixClient/issues'
+    vcsUrl = 'https://github.com/dsrees/JavaPhoenixClient.git'
+    licenses = ['MIT']
+    version {
+      name = project.version
+      vcsTag = project.version
     }
-    publications = ['nebula']
+  }
+  publications = ['nebula']
 }
