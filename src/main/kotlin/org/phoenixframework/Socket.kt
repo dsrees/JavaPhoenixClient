@@ -22,14 +22,29 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+typealias Payload = Map<String, Any>
+
 class Socket {
 
-    /**
-     * All timers associated with a socket will share the same pool. Used for every Channel or
-     * Push that is sent through or created by a Socket instance. Different Socket instances will
-     * create individual thread pools.
-     */
-    private val timerPool = ScheduledThreadPoolExecutor(8)
+  /**
+   * All timers associated with a socket will share the same pool. Used for every Channel or
+   * Push that is sent through or created by a Socket instance. Different Socket instances will
+   * create individual thread pools.
+   */
+  internal val timerPool = ScheduledThreadPoolExecutor(8)
 
+  internal var timeout: Long = Defaults.TIMEOUT
+
+  val isConnected: Boolean
+    get() = true
+
+  internal fun makeRef(): String {
+    // TODO: Real implementation
+    return "1"
+  }
+
+  internal fun remove(channel: Channel) {
+
+  }
 
 }

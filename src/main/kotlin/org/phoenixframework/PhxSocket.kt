@@ -15,7 +15,6 @@ import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.concurrent.schedule
 
-typealias Payload = Map<String, Any>
 
 /** Default timeout set to 10s */
 const val DEFAULT_TIMEOUT: Long = 10000
