@@ -127,8 +127,7 @@ class Channel(
       // Only handle a timeout if the Channel is in the 'joining' state
       if (!this.isJoining) return@receive
 
-      // TODO: Add Socket Logging
-//      this.socket.logItems("Channel: timeouts $topic, $joinRef after $timeout ms")
+      this.socket.logItems("Channel: timeouts $topic, $joinRef after $timeout ms")
 
       // Send a Push to the server to leave the Channel
       val leavePush = Push(
@@ -148,7 +147,7 @@ class Channel(
       this.rejoinTimer.reset()
 
       // Log that the channel was left
-//      this.socket.logItems("Channel: close $topic")
+      this.socket.logItems("Channel: close $topic")
 
       // Mark the channel as closed and remove it from the socket
       this.state = State.CLOSED
@@ -162,7 +161,7 @@ class Channel(
       if (this.isLeaving || this.isClosed) return@onError
 
       // Log that the channel received an error
-//        this.socket.logItems("Channel: error $topic")
+      this.socket.logItems("Channel: error $topic")
 
       // Mark the channel as errored and attempt to rejoin
       this.state = State.ERRORED
@@ -275,8 +274,8 @@ class Channel(
 
     // Perform the same behavior if the channel leaves successfully or not
     val onClose: ((Message) -> Unit) = {
-      //      this.socket.logItems("Channel: leave $topic")
-//      this.trigger(it)
+      this.socket.logItems("Channel: leave $topic")
+      this.trigger(it)
     }
 
     // Push event to send to the server
@@ -307,7 +306,7 @@ class Channel(
 
     // If the message is a lifecycle event and it is not a join for this channel, drop the outdated message
     if (message.joinRef != null && isLifecycleEvent && message.joinRef != this.joinRef) {
-//      this.socket.logItems("Channel: Dropping outdated message. ${message.topic}")
+      this.socket.logItems("Channel: Dropping outdated message. ${message.topic}")
       return false
     }
 

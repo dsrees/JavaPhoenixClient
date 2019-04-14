@@ -1,5 +1,9 @@
 package org.phoenixframework
 
+import com.google.gson.FieldNamingPolicy
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+
 object Defaults {
 
   /** Default timeout of 10s */
@@ -12,4 +16,11 @@ object Defaults {
   val steppedBackOff: (Int) -> Long = { tries ->
     if (tries > 3) 10000 else listOf(1000L, 2000L, 5000L)[tries - 1]
   }
+
+  /** The default Gson configuration to use when parsing messages */
+  val gson: Gson
+    get() = GsonBuilder()
+        .setLenient()
+        .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+        .create()
 }

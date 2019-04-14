@@ -1,6 +1,13 @@
 package org.phoenixframework
 
+import com.google.gson.Gson
+import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Response
+import java.net.URL
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 // Copyright (c) 2019 Daniel Rees <daniel.rees18@gmail.com>
 //
@@ -22,10 +29,76 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+/** Alias for a JSON mapping */
 typealias Payload = Map<String, Any>
 
-class Socket {
+/** Data class that holds callbacks assigned to the socket */
+internal data class StateChangeCallbacks(
+  val open: MutableList<() -> Unit> = ArrayList(),
+  val close: MutableList<() -> Unit> = ArrayList(),
+  val error: MutableList<(Throwable, Response?) -> Unit> = ArrayList(),
+  val message: MutableList<(Message) -> Unit> = ArrayList()
+) {
+  /** Clears all stored callbacks */
+  fun release() {
+    open.clear()
+    close.clear()
+    error.clear()
+    message.clear()
+  }
+}
 
+/** The code used when the socket was closed without error */
+const val WS_CLOSE_NORMAL = 1000
+
+/**
+ * Connects to a Phoenix Server
+ */
+class Socket(
+  url: String,
+  params: Payload? = null,
+  private val gson: Gson = Defaults.gson,
+  private val client: OkHttpClient = OkHttpClient.Builder().build()
+) {
+
+  //------------------------------------------------------------------------------
+  // Public Attributes
+  //------------------------------------------------------------------------------
+  /**
+   * The string WebSocket endpoint (ie `"ws://example.com/socket"`,
+   * `"wss://example.com"`, etc.) that was passed to the Socket during
+   * initialization. The URL endpoint will be modified by the Socket to
+   * include `"/websocket"` if missing.
+   */
+  val endpoint: String
+
+  /** The fully qualified socket URL */
+  val endpointUrl: URL
+
+  /**
+   * The optional params to pass when connecting. Must be set when
+   * initializing the Socket. These will be appended to the URL.
+   */
+  val params: Payload? = params
+
+  /** Timeout to use when opening a connection */
+  var timeout: Long = Defaults.TIMEOUT
+
+  /** Interval between sending a heartbeat */
+  var heartbeatInterval: Long = Defaults.HEARTBEAT
+
+  /** Internval between socket reconnect attempts */
+  var reconnectAfterMs: ((Int) -> Long) = Defaults.steppedBackOff
+
+  /** The optional function to receive logs */
+  var logger: ((String) -> Unit)? = null
+
+  /** Disables heartbeats from being sent. Default is false. */
+  var skipHeartbeat: Boolean = false
+
+  //------------------------------------------------------------------------------
+  // Internal Attributes
+  //------------------------------------------------------------------------------
   /**
    * All timers associated with a socket will share the same pool. Used for every Channel or
    * Push that is sent through or created by a Socket instance. Different Socket instances will
@@ -33,18 +106,347 @@ class Socket {
    */
   internal val timerPool = ScheduledThreadPoolExecutor(8)
 
-  internal var timeout: Long = Defaults.TIMEOUT
+  //------------------------------------------------------------------------------
+  // Private Attributes
+  //------------------------------------------------------------------------------
+  /** Returns the type of transport to use. Potentially expose for custom transports */
+  private val transport: (URL) -> Transport = { WebSocketTransport(it, client) }
 
-  val isConnected: Boolean
-    get() = true
+  /** Collection of callbacks for socket state changes */
+  private val stateChangeCallbacks: StateChangeCallbacks = StateChangeCallbacks()
 
-  internal fun makeRef(): String {
-    // TODO: Real implementation
-    return "1"
+  /** Collection of unclosed channels created by the Socket */
+  private var channels: MutableList<Channel> = ArrayList()
+
+  /** Buffers messages that need to be sent once the socket has connected */
+  private var sendBuffer: MutableList<() -> Unit> = ArrayList()
+
+  /** Ref counter for messages */
+  private var ref: Int = 0
+
+  /** Task to be triggered in the future to send a heartbeat message */
+  private var heartbeatTask: ScheduledFuture<*>? = null
+
+  /** Ref counter for the last heartbeat that was sent */
+  private var pendingHeartbeatRef: String? = null
+
+  /** Timer to use when attempting to reconnect */
+  private var reconnectTimer: TimeoutTimer
+
+  //------------------------------------------------------------------------------
+  // Connection Attributes
+  //------------------------------------------------------------------------------
+  /** The underlying WebSocket connection */
+  private var connection: Transport? = null
+
+  //------------------------------------------------------------------------------
+  // Initialization
+  //------------------------------------------------------------------------------
+  init {
+    // Silently replace web socket URLs with HTTP URLs.
+    var mutableUrl = url
+    if (url.regionMatches(0, "ws:", 0, 3, ignoreCase = true)) {
+      mutableUrl = "http:" + url.substring(3)
+    } else if (url.regionMatches(0, "wss:", 0, 4, ignoreCase = true)) {
+      mutableUrl = "https:" + url.substring(4)
+    }
+
+    // Ensure that the URL ends with "/websocket"
+    if (!mutableUrl.contains("/websocket")) {
+      // Do not duplicate '/' in path
+      if (mutableUrl.last() != '/') {
+        mutableUrl += "/"
+      }
+
+      // append "websocket" to the path
+      mutableUrl += "websocket"
+    }
+
+    // If there are query params, append them now
+    var httpUrl = HttpUrl.parse(mutableUrl) ?: throw IllegalArgumentException("invalid url: $url")
+    params?.let {
+      val httpBuilder = httpUrl.newBuilder()
+      it.forEach { (key, value) ->
+        httpBuilder.addQueryParameter(key, value.toString())
+      }
+
+      httpUrl = httpBuilder.build()
+    }
+
+    this.endpoint = mutableUrl
+    this.endpointUrl = httpUrl.url()
+
+    // Create reconnect timer
+    this.reconnectTimer = TimeoutTimer(
+        scheduledExecutorService = timerPool,
+        timerCalculation = reconnectAfterMs,
+        callback = {
+          // log(socket attempting to reconnect)
+          // this.teardown() { this.connect() }
+        })
   }
 
-  internal fun remove(channel: Channel) {
+  //------------------------------------------------------------------------------
+  // Public Properties
+  //------------------------------------------------------------------------------
+  /** @return The socket protocol being used. e.g. "wss", "ws" */
+  val protocol: String
+    get() = when (endpointUrl.protocol) {
+      "https" -> "wss"
+      "http" -> "ws"
+      else -> endpointUrl.protocol
+    }
 
+  /** @return True if the connection exists and is open */
+  val isConnected: Boolean
+    get() = this.connection?.readyState == ReadyState.OPEN
+
+  //------------------------------------------------------------------------------
+  // Public
+  //------------------------------------------------------------------------------
+  fun connect() {
+    // Do not attempt to connect if already connected
+    if (isConnected) return
+
+    this.connection = this.transport(endpointUrl)
+    this.connection?.onOpen = { onConnectionOpened() }
+    this.connection?.onClose = { code -> onConnectionClosed(code) }
+    this.connection?.onError = { t, r -> onConnectionError(t, r) }
+    this.connection?.onMessage = { m -> onConnectionMessage(m) }
+    this.connection?.connect()
+  }
+
+  fun disconnect(
+    code: Int = WS_CLOSE_NORMAL,
+    reason: String? = null,
+    callback: (() -> Unit)? = null
+  ) {
+    this.reconnectTimer.reset()
+    this.teardown(code, reason, callback)
+
+  }
+
+  fun onOpen(callback: (() -> Unit)) {
+    this.stateChangeCallbacks.open.add(callback)
+  }
+
+  fun onClose(callback: () -> Unit) {
+    this.stateChangeCallbacks.close.add(callback)
+  }
+
+  fun onError(callback: (Throwable, Response?) -> Unit) {
+    this.stateChangeCallbacks.error.add(callback)
+  }
+
+  fun onMessage(callback: (Message) -> Unit) {
+    this.stateChangeCallbacks.message.add(callback)
+  }
+
+  fun removeAllCallbacks() {
+    this.stateChangeCallbacks.release()
+  }
+
+  fun channel(topic: String, params: Payload = mapOf()): Channel {
+    val channel = Channel(topic, params, this)
+    this.channels.add(channel)
+
+    return channel
+  }
+
+  fun remove(channel: Channel) {
+    this.channels.removeAll { it.joinRef == channel.joinRef }
+  }
+
+  //------------------------------------------------------------------------------
+  // Internal
+  //------------------------------------------------------------------------------
+  internal fun push(
+    topic: String,
+    event: String,
+    payload: Payload,
+    ref: String? = null,
+    joinRef: String? = null
+  ) {
+
+    val callback: (() -> Unit) = {
+      val body = mutableMapOf<String, Any>()
+      body["topic"] = topic
+      body["event"] = event
+      body["payload"] = payload
+
+      ref?.let { body["ref"] = it }
+      joinRef?.let { body["join_ref"] = it }
+
+      val data = gson.toJson(body)
+      connection?.let { transport ->
+        this.logItems("Push: Sending $data")
+        transport.send(data)
+      }
+    }
+
+    if (isConnected) {
+      // If the socket is connected, then execute the callback immediately.
+      callback.invoke()
+    } else {
+      // If the socket is not connected, add the push to a buffer which will
+      // be sent immediately upon connection.
+      sendBuffer.add(callback)
+    }
+  }
+
+  /** @return the next message ref, accounting for overflows */
+  internal fun makeRef(): String {
+    this.ref = if (ref == Int.MAX_VALUE) 0 else ref + 1
+    return ref.toString()
+  }
+
+  fun logItems(body: String) {
+    logger?.let {
+      it(body)
+    }
+  }
+
+  //------------------------------------------------------------------------------
+  // Private
+  //------------------------------------------------------------------------------
+  private fun teardown(
+    code: Int = WS_CLOSE_NORMAL,
+    reason: String? = null,
+    callback: (() -> Unit)? = null
+  ) {
+    // Disconnect the transport
+    this.connection?.onClose = null
+    this.connection?.disconnect(code, reason)
+    this.connection = null
+
+    // Heartbeats are no longer needed
+    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask = null
+
+    // Since the connections onClose was null'd out, inform all state callbacks
+    // that the Socket has closed
+    this.stateChangeCallbacks.close.forEach { it.invoke() }
+    callback?.invoke()
+  }
+
+  /** Triggers an error event to all connected Channels */
+  private fun triggerChannelError() {
+    this.channels.forEach { it.trigger(Channel.Event.ERROR.value) }
+  }
+
+  /** Send all messages that were buffered before the socket opened */
+  private fun flushSendBuffer() {
+    if (isConnected && sendBuffer.isNotEmpty()) {
+      this.sendBuffer.forEach { it.invoke() }
+      this.sendBuffer.clear()
+    }
+  }
+
+  //------------------------------------------------------------------------------
+  // Heartbeat
+  //------------------------------------------------------------------------------
+  private fun resetHeartbeat() {
+    // Clear anything related to the previous heartbeat
+    this.pendingHeartbeatRef = null
+    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask = null
+
+    // Do not start up the heartbeat timer if skipHeartbeat is true
+    if (skipHeartbeat) return
+    heartbeatTask = timerPool.schedule({
+
+    }, heartbeatInterval, TimeUnit.MILLISECONDS)
+  }
+
+  private fun sendHeartbeat() {
+    // Do not send if the connection is closed
+    if (!isConnected) return
+
+    // If there is a pending heartbeat ref, then the last heartbeat was
+    // never acknowledged by the server. Close the connection and attempt
+    // to reconnect.
+    pendingHeartbeatRef?.let {
+      pendingHeartbeatRef = null
+      logItems("Transport: Heartbeat timeout. Attempt to re-establish connection")
+
+      // Disconnect the socket manually. Do not use `teardown` or
+      // `disconnect` as they will nil out the websocket delegate
+      this.connection?.disconnect(WS_CLOSE_NORMAL, "Heartbeat timed out")
+      return
+    }
+
+    // The last heartbeat was acknowledged by the server. Send another one
+    this.pendingHeartbeatRef = this.makeRef()
+    this.push(
+        topic = "phoenix",
+        event = Channel.Event.HEARTBEAT.value,
+        payload = mapOf(),
+        ref = pendingHeartbeatRef)
+  }
+
+  //------------------------------------------------------------------------------
+  // Connection Transport Hooks
+  //------------------------------------------------------------------------------
+  private fun onConnectionOpened() {
+    this.logItems("Transport: Connected to $endpoint")
+
+    // Send any messages that were waiting for a connection
+    this.flushSendBuffer()
+
+    // Reset how the socket tried to reconnect
+    this.reconnectTimer.reset()
+
+    // Restart the heartbeat timer
+    this.resetHeartbeat()
+
+    // Inform all onOpen callbacks that the Socket has opened
+    this.stateChangeCallbacks.open.forEach { it.invoke() }
+  }
+
+  private fun onConnectionClosed(code: Int) {
+    this.logItems("Transport: close")
+    this.triggerChannelError()
+
+    // Prevent the heartbeat from triggering if the socket closed
+    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask = null
+
+    // Inform callbacks the socket closed
+    this.stateChangeCallbacks.close.forEach { it.invoke() }
+
+    // If there was a non-normal event when the connection closed, attempt
+    // to schedule a reconnect attempt
+    if (code != WS_CLOSE_NORMAL) {
+      reconnectTimer.scheduleTimeout()
+    }
+  }
+
+  private fun onConnectionMessage(rawMessage: String) {
+    this.logItems("Receive: $rawMessage")
+
+    // Parse the message as JSON
+    val message = gson.fromJson(rawMessage, Message::class.java)
+
+    // Clear heartbeat ref, preventing a heartbeat timeout disconnect
+    if (message.ref == pendingHeartbeatRef) pendingHeartbeatRef = null
+
+    // Dispatch the message to all channels that belong to the topic
+    this.channels
+        .filter { it.isMember(message) }
+        .forEach { it.trigger(message) }
+
+    // Inform all onMessage callbacks of the message
+    this.stateChangeCallbacks.message.forEach { it.invoke(message) }
+  }
+
+  private fun onConnectionError(t: Throwable, response: Response?) {
+    this.logItems("Transport: error $t")
+
+    // Send an error to all channels
+    this.triggerChannelError()
+
+    // Inform any state callbacks of the error
+    this.stateChangeCallbacks.error.forEach { it.invoke(t, response) }
   }
 
 }
