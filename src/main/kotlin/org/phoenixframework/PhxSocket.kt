@@ -11,11 +11,8 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.net.URL
 import java.util.Timer
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
 import kotlin.concurrent.schedule
 
-typealias Payload = Map<String, Any>
 
 /** Default timeout set to 10s */
 const val DEFAULT_TIMEOUT: Long = 10000
@@ -23,8 +20,6 @@ const val DEFAULT_TIMEOUT: Long = 10000
 /** Default heartbeat interval set to 30s */
 const val DEFAULT_HEARTBEAT: Long = 30000
 
-/** The code used when the socket was closed without error */
-const val WS_CLOSE_NORMAL = 1000
 
 /** The code used when the socket was closed after the heartbeat timer timed out */
 const val WS_CLOSE_HEARTBEAT_ERROR = 5000
