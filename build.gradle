@@ -1,6 +1,7 @@
 buildscript { repositories { jcenter() } }
 plugins {
   id 'java'
+  id 'jacoco'
   id 'org.jetbrains.kotlin.jvm' version '1.2.51'
   id 'nebula.project' version '4.0.1'
   id "nebula.maven-publish" version "7.2.4"
