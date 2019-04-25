@@ -108,48 +108,43 @@ class Socket(
 
   //------------------------------------------------------------------------------
   // Private Attributes
+  // these are marked as `internal` so that they can be accessed during tests
   //------------------------------------------------------------------------------
   /** Returns the type of transport to use. Potentially expose for custom transports */
-  private val transport: (URL) -> Transport = { WebSocketTransport(it, client) }
+  internal var transport: (URL) -> Transport = { WebSocketTransport(it, client) }
 
   /** Collection of callbacks for socket state changes */
-  private val stateChangeCallbacks: StateChangeCallbacks = StateChangeCallbacks()
+  internal val stateChangeCallbacks: StateChangeCallbacks = StateChangeCallbacks()
 
   /** Collection of unclosed channels created by the Socket */
-  private var channels: MutableList<Channel> = ArrayList()
+  internal var channels: MutableList<Channel> = ArrayList()
 
   /** Buffers messages that need to be sent once the socket has connected */
-  private var sendBuffer: MutableList<() -> Unit> = ArrayList()
+  internal var sendBuffer: MutableList<() -> Unit> = ArrayList()
 
   /** Ref counter for messages */
-  private var ref: Int = 0
+  internal var ref: Int = 0
 
   /** Task to be triggered in the future to send a heartbeat message */
-  private var heartbeatTask: ScheduledFuture<*>? = null
+  internal var heartbeatTask: ScheduledFuture<*>? = null
 
   /** Ref counter for the last heartbeat that was sent */
-  private var pendingHeartbeatRef: String? = null
+  internal var pendingHeartbeatRef: String? = null
 
   /** Timer to use when attempting to reconnect */
-  private var reconnectTimer: TimeoutTimer
+  internal var reconnectTimer: TimeoutTimer
 
   //------------------------------------------------------------------------------
   // Connection Attributes
   //------------------------------------------------------------------------------
   /** The underlying WebSocket connection */
-  private var connection: Transport? = null
+  internal var connection: Transport? = null
 
   //------------------------------------------------------------------------------
   // Initialization
   //------------------------------------------------------------------------------
   init {
-    // Silently replace web socket URLs with HTTP URLs.
     var mutableUrl = url
-    if (url.regionMatches(0, "ws:", 0, 3, ignoreCase = true)) {
-      mutableUrl = "http:" + url.substring(3)
-    } else if (url.regionMatches(0, "wss:", 0, 4, ignoreCase = true)) {
-      mutableUrl = "https:" + url.substring(4)
-    }
 
     // Ensure that the URL ends with "/websocket"
     if (!mutableUrl.contains("/websocket")) {
@@ -160,6 +155,16 @@ class Socket(
 
       // append "websocket" to the path
       mutableUrl += "websocket"
+    }
+
+    // Store the endpoint before changing the protocol
+    this.endpoint = mutableUrl
+
+    // Silently replace web socket URLs with HTTP URLs.
+    if (url.regionMatches(0, "ws:", 0, 3, ignoreCase = true)) {
+      mutableUrl = "http:" + url.substring(3)
+    } else if (url.regionMatches(0, "wss:", 0, 4, ignoreCase = true)) {
+      mutableUrl = "https:" + url.substring(4)
     }
 
     // If there are query params, append them now
@@ -173,7 +178,7 @@ class Socket(
       httpUrl = httpBuilder.build()
     }
 
-    this.endpoint = mutableUrl
+    // Store the URL that will be used to establish a connection
     this.endpointUrl = httpUrl.url()
 
     // Create reconnect timer
@@ -181,8 +186,8 @@ class Socket(
         scheduledExecutorService = timerPool,
         timerCalculation = reconnectAfterMs,
         callback = {
-          // log(socket attempting to reconnect)
-          // this.teardown() { this.connect() }
+          this.logItems("Socket attempting to reconnect")
+          this.teardown { this.connect() }
         })
   }
 
