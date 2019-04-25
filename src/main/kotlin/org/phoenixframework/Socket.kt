@@ -199,7 +199,7 @@ class Socket(
 
   /** @return True if the connection exists and is open */
   val isConnected: Boolean
-    get() = this.connection?.readyState == ReadyState.OPEN
+    get() = this.connection?.readyState == Transport.ReadyState.OPEN
 
   //------------------------------------------------------------------------------
   // Public
