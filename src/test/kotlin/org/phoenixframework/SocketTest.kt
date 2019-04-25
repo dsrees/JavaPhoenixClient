@@ -2,6 +2,8 @@ package org.phoenixframework
 
 import com.google.common.truth.Truth.assertThat
 import com.nhaarman.mockitokotlin2.any
+import com.nhaarman.mockitokotlin2.argumentCaptor
+import com.nhaarman.mockitokotlin2.eq
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.never
 import com.nhaarman.mockitokotlin2.spy
@@ -17,10 +19,13 @@ import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import java.net.URL
 import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 class SocketTest {
 
   @Mock lateinit var okHttpClient: OkHttpClient
+  @Mock lateinit var mockThreadPool: ScheduledThreadPoolExecutor
 
   lateinit var connection: Transport
   lateinit var socket: Socket
@@ -33,6 +38,7 @@ class SocketTest {
 
     socket = Socket("wss://localhost:4000/socket")
     socket.transport = { connection }
+    socket.timerPool = mockThreadPool
 
   }
 
@@ -109,7 +115,6 @@ class SocketTest {
     assertThat(Socket("wss://localhost:4000/socket/websocket", spacesParams).endpointUrl.toString())
         .isEqualTo("https://localhost:4000/socket/websocket?user_id=1&token=abc%20123")
   }
-
 
   //------------------------------------------------------------------------------
   // Public Properties
@@ -271,7 +276,7 @@ class SocketTest {
 
   @Test
   fun `disconnect() calls callback`() {
-    val mockCallback = mock<()->Unit>{}
+    val mockCallback = mock<() -> Unit> {}
 
     socket.disconnect(callback = mockCallback)
     verify(mockCallback).invoke()
@@ -350,7 +355,8 @@ class SocketTest {
     socket.connect()
     socket.push("topic", "event", mapOf("one" to "two"), "ref", "join-ref")
 
-    val expect = "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"ref\",\"join_ref\":\"join-ref\"}"
+    val expect =
+        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"ref\",\"join_ref\":\"join-ref\"}"
     verify(connection).send(expect)
   }
 
@@ -446,9 +452,16 @@ class SocketTest {
     socket.sendBuffer.add { twoCalled += 1 }
     val threeCalled = 0
 
-    whenever(connection.readyState).thenReturn(Transport.ReadyState.CLOSED)
+    whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
+
+    // does nothing if not connected
+    socket.flushSendBuffer()
+    assertThat(oneCalled).isEqualTo(0)
+
+    // connect
     socket.connect()
 
+    // sends once connected
     socket.flushSendBuffer()
     assertThat(oneCalled).isEqualTo(1)
     assertThat(twoCalled).isEqualTo(1)
@@ -457,9 +470,9 @@ class SocketTest {
 
   @Test
   fun `flushSendBuffer() empties send buffer`() {
-    socket.sendBuffer.add {  }
+    socket.sendBuffer.add { }
 
-    whenever(connection.readyState).thenReturn(Transport.ReadyState.CLOSED)
+    whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
     socket.connect()
 
     assertThat(socket.sendBuffer).isNotEmpty()
@@ -471,6 +484,208 @@ class SocketTest {
   /* onConnectionOpen */
   @Test
   fun `onConnectionOpened() flushes the send buffer`() {
-    
+    whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
+    socket.connect()
+
+    var oneCalled = 0
+    socket.sendBuffer.add { oneCalled += 1 }
+
+    socket.onConnectionOpened()
+    assertThat(oneCalled).isEqualTo(1)
+    assertThat(socket.sendBuffer).isEmpty()
+  }
+
+  @Test
+  fun `onConnectionOpened() resets reconnect timer`() {
+    val mockTimer = mock<TimeoutTimer>()
+    socket.reconnectTimer = mockTimer
+
+    socket.onConnectionOpened()
+    verify(mockTimer).reset()
+  }
+
+  @Test
+  fun `onConnectionOpened() resets the heartbeat`() {
+    val mockTask = mock<ScheduledFuture<*>>()
+    socket.heartbeatTask = mockTask
+
+    socket.onConnectionOpened()
+    verify(mockTask).cancel(true)
+    verify(mockThreadPool).schedule(any(), any(), any())
+  }
+
+  @Test
+  fun `onConnectionOpened() invokes all onOpen callbacks`() {
+    var oneCalled = 0
+    socket.onOpen { oneCalled += 1 }
+    var twoCalled = 0
+    socket.onOpen { twoCalled += 1 }
+    var threeCalled = 0
+    socket.onClose { threeCalled += 1 }
+
+    socket.onConnectionOpened()
+    assertThat(oneCalled).isEqualTo(1)
+    assertThat(twoCalled).isEqualTo(1)
+    assertThat(threeCalled).isEqualTo(0)
+  }
+
+  /* resetHeartbeat */
+  @Test
+  fun `resetHeartbeat() clears any pending heartbeat`() {
+    socket.pendingHeartbeatRef = "1"
+    socket.resetHeartbeat()
+
+    assertThat(socket.pendingHeartbeatRef).isNull()
+  }
+
+  @Test
+  fun `resetHeartbeat() does not schedule heartbeat if skipHeartbeat == true`() {
+    socket.skipHeartbeat = true
+    socket.resetHeartbeat()
+
+    verifyZeroInteractions(mockThreadPool)
+  }
+
+  @Test
+  fun `resetHeartbeat() creates a future heartbeat task`() {
+    val mockTask = mock<ScheduledFuture<*>>()
+    whenever(mockThreadPool.schedule(any(), any(), any())).thenReturn(mockTask)
+
+    whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
+    socket.connect()
+    socket.heartbeatInterval = 5_000
+
+    assertThat(socket.heartbeatTask).isNull()
+    socket.resetHeartbeat()
+
+    assertThat(socket.heartbeatTask).isNotNull()
+    argumentCaptor<Runnable> {
+      verify(mockThreadPool).schedule(capture(), eq(5_000L), eq(TimeUnit.MILLISECONDS))
+
+      // fire the task
+      allValues.first().run()
+
+      val expected = "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
+      verify(connection).send(expected)
+    }
+  }
+
+  /* onConnectionClosed */
+  @Test
+  fun `onConnectionClosed() it does not schedule reconnectTimer timeout if normal close`() {
+    val mockTimer = mock<TimeoutTimer>()
+    socket.reconnectTimer = mockTimer
+
+    socket.onConnectionClosed(WS_CLOSE_NORMAL)
+    verify(mockTimer, never()).scheduleTimeout()
+  }
+
+  @Test
+  fun `onConnectionClosed schedules reconnectTimer if not normal close`() {
+    val mockTimer = mock<TimeoutTimer>()
+    socket.reconnectTimer = mockTimer
+
+    socket.onConnectionClosed(1001)
+    verify(mockTimer).scheduleTimeout()
+  }
+
+  @Test
+  fun `onConnectionClosed() cancels heartbeat task`() {
+    val mockTask = mock<ScheduledFuture<*>>()
+    socket.heartbeatTask = mockTask
+
+    socket.onConnectionClosed(1000)
+    verify(mockTask).cancel(true)
+    assertThat(socket.heartbeatTask).isNull()
+  }
+
+  @Test
+  fun `onConnectionClosed() triggers onClose callbacks`() {
+    var oneCalled = 0
+    socket.onClose { oneCalled += 1 }
+    var twoCalled = 0
+    socket.onClose { twoCalled += 1 }
+    var threeCalled = 0
+    socket.onOpen { threeCalled += 1 }
+
+    socket.onConnectionClosed(1000)
+    assertThat(oneCalled).isEqualTo(1)
+    assertThat(twoCalled).isEqualTo(1)
+    assertThat(threeCalled).isEqualTo(0)
+  }
+
+  @Test
+  fun `onConnectionClosed() triggers channel error`() {
+    val channel = mock<Channel>()
+    socket.channels.add(channel)
+
+    socket.onConnectionClosed(1001)
+    verify(channel).trigger("phx_error")
+  }
+
+  /* onConnectionError */
+  @Test
+  fun `onConnectionError() triggers onClose callbacks`() {
+    var oneCalled = 0
+    socket.onError { _, _ -> oneCalled += 1 }
+    var twoCalled = 0
+    socket.onError { _, _ -> twoCalled += 1 }
+    var threeCalled = 0
+    socket.onOpen { threeCalled += 1 }
+
+    socket.onConnectionError(Throwable(), null)
+    assertThat(oneCalled).isEqualTo(1)
+    assertThat(twoCalled).isEqualTo(1)
+    assertThat(threeCalled).isEqualTo(0)
+  }
+
+  @Test
+  fun `onConnectionError() triggers channel error`() {
+    val channel = mock<Channel>()
+    socket.channels.add(channel)
+
+    socket.onConnectionError(Throwable(), null)
+    verify(channel).trigger("phx_error")
+  }
+
+  @Test
+  fun `onConnectionMessage() parses raw messages and triggers channel event`() {
+    val targetChannel = mock<Channel>()
+    whenever(targetChannel.isMember(any())).thenReturn(true)
+    val otherChannel = mock<Channel>()
+    whenever(otherChannel.isMember(any())).thenReturn(false)
+
+    socket.channels.add(targetChannel)
+    socket.channels.add(otherChannel)
+
+    val rawMessage =
+        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
+    socket.onConnectionMessage(rawMessage)
+
+    verify(targetChannel).trigger(message = any())
+    verify(otherChannel, never()).trigger(message = any())
+  }
+
+  @Test
+  fun `onConnectionMessage() invokes onMessage callbacks`() {
+    var message: Message? = null
+    socket.onMessage { message = it }
+
+    val rawMessage =
+        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
+    socket.onConnectionMessage(rawMessage)
+
+    assertThat(message?.topic).isEqualTo("topic")
+    assertThat(message?.event).isEqualTo("event")
+  }
+
+  @Test
+  fun `onConnectionMessage() clears pending heartbeat`() {
+    socket.pendingHeartbeatRef = "5"
+
+    val rawMessage =
+        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"5\"}"
+    socket.onConnectionMessage(rawMessage)
+    assertThat(socket.pendingHeartbeatRef).isNull()
   }
 }

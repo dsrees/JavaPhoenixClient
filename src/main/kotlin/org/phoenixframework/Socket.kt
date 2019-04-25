@@ -104,7 +104,7 @@ class Socket(
    * Push that is sent through or created by a Socket instance. Different Socket instances will
    * create individual thread pools.
    */
-  internal val timerPool = ScheduledThreadPoolExecutor(8)
+  internal var timerPool = ScheduledThreadPoolExecutor(8)
 
   //------------------------------------------------------------------------------
   // Private Attributes
