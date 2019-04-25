@@ -306,9 +306,7 @@ class Socket(
   }
 
   fun logItems(body: String) {
-    logger?.let {
-      it(body)
-    }
+    logger?.invoke(body)
   }
 
   //------------------------------------------------------------------------------
@@ -340,7 +338,7 @@ class Socket(
   }
 
   /** Send all messages that were buffered before the socket opened */
-  private fun flushSendBuffer() {
+  internal fun flushSendBuffer() {
     if (isConnected && sendBuffer.isNotEmpty()) {
       this.sendBuffer.forEach { it.invoke() }
       this.sendBuffer.clear()
@@ -350,7 +348,7 @@ class Socket(
   //------------------------------------------------------------------------------
   // Heartbeat
   //------------------------------------------------------------------------------
-  private fun resetHeartbeat() {
+  internal fun resetHeartbeat() {
     // Clear anything related to the previous heartbeat
     this.pendingHeartbeatRef = null
     this.heartbeatTask?.cancel(true)
@@ -358,12 +356,11 @@ class Socket(
 
     // Do not start up the heartbeat timer if skipHeartbeat is true
     if (skipHeartbeat) return
-    heartbeatTask = timerPool.schedule({
-
-    }, heartbeatInterval, TimeUnit.MILLISECONDS)
+    heartbeatTask =
+        timerPool.schedule({ sendHeartbeat() }, heartbeatInterval, TimeUnit.MILLISECONDS)
   }
 
-  private fun sendHeartbeat() {
+  internal fun sendHeartbeat() {
     // Do not send if the connection is closed
     if (!isConnected) return
 
@@ -392,7 +389,7 @@ class Socket(
   //------------------------------------------------------------------------------
   // Connection Transport Hooks
   //------------------------------------------------------------------------------
-  private fun onConnectionOpened() {
+  internal fun onConnectionOpened() {
     this.logItems("Transport: Connected to $endpoint")
 
     // Send any messages that were waiting for a connection
@@ -408,7 +405,7 @@ class Socket(
     this.stateChangeCallbacks.open.forEach { it.invoke() }
   }
 
-  private fun onConnectionClosed(code: Int) {
+  internal fun onConnectionClosed(code: Int) {
     this.logItems("Transport: close")
     this.triggerChannelError()
 
@@ -426,7 +423,7 @@ class Socket(
     }
   }
 
-  private fun onConnectionMessage(rawMessage: String) {
+  internal fun onConnectionMessage(rawMessage: String) {
     this.logItems("Receive: $rawMessage")
 
     // Parse the message as JSON
@@ -444,7 +441,7 @@ class Socket(
     this.stateChangeCallbacks.message.forEach { it.invoke(message) }
   }
 
-  private fun onConnectionError(t: Throwable, response: Response?) {
+  internal fun onConnectionError(t: Throwable, response: Response?) {
     this.logItems("Transport: error $t")
 
     // Send an error to all channels
