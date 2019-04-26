@@ -16,7 +16,7 @@ data class Binding(
  */
 class Channel(
   val topic: String,
-  var params: Payload,
+  params: Payload,
   internal val socket: Socket
 ) {
 
@@ -60,7 +60,7 @@ class Channel(
   // Channel Attributes
   //------------------------------------------------------------------------------
   /** Current state of the Channel */
-  internal var state: Channel.State
+  internal var state: State
 
   /** Collection of event bindings. */
   internal val bindings: ConcurrentLinkedQueue<Binding>
@@ -71,23 +71,30 @@ class Channel(
   /** Timeout when attempting to join a Channel */
   internal var timeout: Long
 
+  /** Params passed in through constructions and provided to the JoinPush */
+  var params: Payload = params
+    set(value) {
+      joinPush.payload = value
+      field = value
+    }
+
   /** Set to true once the channel has attempted to join */
-  var joinedOnce: Boolean
+  internal var joinedOnce: Boolean
 
   /** Push to send then attempting to join */
-  var joinPush: Push
+  internal var joinPush: Push
 
   /** Buffer of Pushes that will be sent once the Channel's socket connects */
-  var pushBuffer: MutableList<Push>
+  internal var pushBuffer: MutableList<Push>
 
   /** Timer to attempt rejoins */
-  var rejoinTimer: TimeoutTimer
+  internal var rejoinTimer: TimeoutTimer
 
   /**
    * Optional onMessage hook that can be provided. Receives all event messages for specialized
    * handling before dispatching to the Channel event callbacks.
    */
-  var onMessage: (Message) -> Message = { it }
+  internal var onMessage: (Message) -> Message = { it }
 
   init {
     this.state = State.CLOSED
