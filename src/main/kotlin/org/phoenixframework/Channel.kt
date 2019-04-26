@@ -99,7 +99,7 @@ class Channel(
     this.rejoinTimer = TimeoutTimer(
         scheduledExecutorService = socket.timerPool,
         callback = { rejoinUntilConnected() },
-        timerCalculation = Defaults.steppedBackOff)
+        timerCalculation = socket.reconnectAfterMs)
 
     // Setup Push to be sent when joining
     this.joinPush = Push(

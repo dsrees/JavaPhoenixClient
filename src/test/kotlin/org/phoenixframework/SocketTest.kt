@@ -42,9 +42,7 @@ class SocketTest {
 
   }
 
-  //------------------------------------------------------------------------------
-  // Constructor
-  //------------------------------------------------------------------------------
+  /* constructor */
   @Test
   fun `constructor sets defaults`() {
     val socket = Socket("wss://localhost:4000/socket")
@@ -116,9 +114,7 @@ class SocketTest {
         .isEqualTo("https://localhost:4000/socket/websocket?user_id=1&token=abc%20123")
   }
 
-  //------------------------------------------------------------------------------
-  // Public Properties
-  //------------------------------------------------------------------------------
+
   /* protocol */
   @Test
   fun `protocol returns wss when protocol is https`() {
@@ -160,9 +156,7 @@ class SocketTest {
     assertThat(socket.isConnected).isTrue()
   }
 
-  //------------------------------------------------------------------------------
-  // Public Functions
-  //------------------------------------------------------------------------------
+
   /* connect() */
   @Test
   fun `connect() establishes websocket connection with endpoint`() {
