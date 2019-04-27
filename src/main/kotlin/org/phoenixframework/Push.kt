@@ -1,6 +1,5 @@
 package org.phoenixframework
 
-import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /**
@@ -21,7 +20,7 @@ class Push(
   var receivedMessage: Message? = null
 
   /** The task to be triggered if the Push times out */
-  var timeoutTask: ScheduledFuture<*>? = null
+  var timeoutTask: DispatchWorkItem? = null
 
   /** Hooks into a Push. Where .receive("ok", callback(Payload)) are stored */
   var receiveHooks: MutableMap<String, MutableList<((message: Message) -> Unit)>> = HashMap()
@@ -133,11 +132,10 @@ class Push(
     }
 
     // Setup and start the Timer
-    this.timeoutTask = channel.socket.timerPool.schedule({
+    this.timeoutTask = channel.socket.dispatchQueue.queue(timeout, TimeUnit.MILLISECONDS) {
       this.trigger("timeout", hashMapOf())
-    }, timeout, TimeUnit.MILLISECONDS)
+    }
   }
-
 
   //------------------------------------------------------------------------------
   // Private
@@ -159,11 +157,9 @@ class Push(
 
   /** Cancels any ongoing timeout task */
   private fun cancelTimeout() {
-    this.timeoutTask?.cancel(true)
+    this.timeoutTask?.cancel()
     this.timeoutTask = null
   }
-
-
 
   /**
    * @param status Status to check if it has been received

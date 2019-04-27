@@ -5,8 +5,6 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.net.URL
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 // Copyright (c) 2019 Daniel Rees <daniel.rees18@gmail.com>
@@ -104,7 +102,8 @@ class Socket(
    * Push that is sent through or created by a Socket instance. Different Socket instances will
    * create individual thread pools.
    */
-  internal var timerPool = ScheduledThreadPoolExecutor(8)
+//  internal var timerPool: ScheduledExecutorService = ScheduledThreadPoolExecutor(8)
+  internal var dispatchQueue: DispatchQueue = ScheduledDispatchQueue()
 
   //------------------------------------------------------------------------------
   // Private Attributes
@@ -126,7 +125,7 @@ class Socket(
   internal var ref: Int = 0
 
   /** Task to be triggered in the future to send a heartbeat message */
-  internal var heartbeatTask: ScheduledFuture<*>? = null
+  internal var heartbeatTask: DispatchWorkItem? = null
 
   /** Ref counter for the last heartbeat that was sent */
   internal var pendingHeartbeatRef: String? = null
@@ -183,7 +182,7 @@ class Socket(
 
     // Create reconnect timer
     this.reconnectTimer = TimeoutTimer(
-        scheduledExecutorService = timerPool,
+        dispatchQueue = dispatchQueue,
         timerCalculation = reconnectAfterMs,
         callback = {
           this.logItems("Socket attempting to reconnect")
@@ -323,7 +322,7 @@ class Socket(
     this.connection = null
 
     // Heartbeats are no longer needed
-    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask?.cancel()
     this.heartbeatTask = null
 
     // Since the connections onClose was null'd out, inform all state callbacks
@@ -351,13 +350,13 @@ class Socket(
   internal fun resetHeartbeat() {
     // Clear anything related to the previous heartbeat
     this.pendingHeartbeatRef = null
-    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask?.cancel()
     this.heartbeatTask = null
 
     // Do not start up the heartbeat timer if skipHeartbeat is true
     if (skipHeartbeat) return
     heartbeatTask =
-        timerPool.schedule({ sendHeartbeat() }, heartbeatInterval, TimeUnit.MILLISECONDS)
+        dispatchQueue.queue(heartbeatInterval, TimeUnit.MILLISECONDS) { sendHeartbeat() }
   }
 
   internal fun sendHeartbeat() {
@@ -410,7 +409,7 @@ class Socket(
     this.triggerChannelError()
 
     // Prevent the heartbeat from triggering if the socket closed
-    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask?.cancel()
     this.heartbeatTask = null
 
     // Inform callbacks the socket closed

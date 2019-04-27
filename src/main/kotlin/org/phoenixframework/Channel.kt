@@ -104,7 +104,7 @@ class Channel(
     this.joinedOnce = false
     this.pushBuffer = mutableListOf()
     this.rejoinTimer = TimeoutTimer(
-        scheduledExecutorService = socket.timerPool,
+        dispatchQueue = socket.dispatchQueue,
         callback = { rejoinUntilConnected() },
         timerCalculation = socket.reconnectAfterMs)
 

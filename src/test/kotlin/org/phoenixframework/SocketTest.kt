@@ -18,14 +18,12 @@ import org.junit.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import java.net.URL
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 class SocketTest {
 
   @Mock lateinit var okHttpClient: OkHttpClient
-  @Mock lateinit var mockThreadPool: ScheduledThreadPoolExecutor
+  @Mock lateinit var mockDispatchQueue: DispatchQueue
 
   lateinit var connection: Transport
   lateinit var socket: Socket
@@ -38,7 +36,7 @@ class SocketTest {
 
     socket = Socket("wss://localhost:4000/socket")
     socket.transport = { connection }
-    socket.timerPool = mockThreadPool
+    socket.dispatchQueue = mockDispatchQueue
 
   }
 
@@ -294,11 +292,11 @@ class SocketTest {
 
   @Test
   fun `disconnect() cancels and releases heartbeat timer`() {
-    val mockTask = mock<ScheduledFuture<*>>()
+    val mockTask = mock<DispatchWorkItem>()
     socket.heartbeatTask = mockTask
 
     socket.disconnect()
-    verify(mockTask).cancel(true)
+    verify(mockTask).cancel()
     assertThat(socket.heartbeatTask).isNull()
   }
 
@@ -500,12 +498,12 @@ class SocketTest {
 
   @Test
   fun `onConnectionOpened() resets the heartbeat`() {
-    val mockTask = mock<ScheduledFuture<*>>()
+    val mockTask = mock<DispatchWorkItem>()
     socket.heartbeatTask = mockTask
 
     socket.onConnectionOpened()
-    verify(mockTask).cancel(true)
-    verify(mockThreadPool).schedule(any(), any(), any())
+    verify(mockTask).cancel()
+    verify(mockDispatchQueue).queue(any(), any(), any())
   }
 
   @Test
@@ -537,13 +535,13 @@ class SocketTest {
     socket.skipHeartbeat = true
     socket.resetHeartbeat()
 
-    verifyZeroInteractions(mockThreadPool)
+    verifyZeroInteractions(mockDispatchQueue)
   }
 
   @Test
   fun `resetHeartbeat() creates a future heartbeat task`() {
-    val mockTask = mock<ScheduledFuture<*>>()
-    whenever(mockThreadPool.schedule(any(), any(), any())).thenReturn(mockTask)
+    val mockTask = mock<DispatchWorkItem>()
+    whenever(mockDispatchQueue.queue(any(), any(), any())).thenReturn(mockTask)
 
     whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
     socket.connect()
@@ -553,11 +551,11 @@ class SocketTest {
     socket.resetHeartbeat()
 
     assertThat(socket.heartbeatTask).isNotNull()
-    argumentCaptor<Runnable> {
-      verify(mockThreadPool).schedule(capture(), eq(5_000L), eq(TimeUnit.MILLISECONDS))
+    argumentCaptor<() -> Unit> {
+      verify(mockDispatchQueue).queue(eq(5_000L), eq(TimeUnit.MILLISECONDS), capture())
 
       // fire the task
-      allValues.first().run()
+      allValues.first().invoke()
 
       val expected = "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
       verify(connection).send(expected)
@@ -585,11 +583,11 @@ class SocketTest {
 
   @Test
   fun `onConnectionClosed() cancels heartbeat task`() {
-    val mockTask = mock<ScheduledFuture<*>>()
+    val mockTask = mock<DispatchWorkItem>()
     socket.heartbeatTask = mockTask
 
     socket.onConnectionClosed(1000)
-    verify(mockTask).cancel(true)
+    verify(mockTask).cancel()
     assertThat(socket.heartbeatTask).isNull()
   }
 

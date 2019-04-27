@@ -8,29 +8,26 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ScheduledThreadPoolExecutor
 
 class ChannelTest {
 
   @Mock lateinit var socket: Socket
-  @Mock lateinit var timerPool: ScheduledThreadPoolExecutor
-  @Mock lateinit var scheduledFuture: ScheduledFuture<*>
   @Mock lateinit var reconnectAfterMs: (Int) -> Long
 
   private val kDefaultRef = "1"
   private val kDefaultTimeout = 10_000L
   private val kDefaultPayload: Payload = mapOf("one" to "two")
 
+  lateinit var dispatchQueue: ManualDispatchQueue
   lateinit var channel: Channel
 
   @Before
   fun setUp() {
     MockitoAnnotations.initMocks(this)
 
-    whenever(timerPool.schedule(any(), any(), any())).thenReturn(scheduledFuture)
+    dispatchQueue = ManualDispatchQueue()
 
-    whenever(socket.timerPool).thenReturn(timerPool)
+    whenever(socket.dispatchQueue).thenReturn(dispatchQueue)
     whenever(socket.makeRef()).thenReturn(kDefaultRef)
     whenever(socket.timeout).thenReturn(kDefaultTimeout)
     whenever(socket.reconnectAfterMs).thenReturn(reconnectAfterMs)
