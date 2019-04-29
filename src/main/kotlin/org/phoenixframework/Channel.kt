@@ -129,7 +129,7 @@ class Channel(
     }
 
     // Perform if Channel timed out while attempting to join
-    this.joinPush.receive("timeout") { message ->
+    this.joinPush.receive("timeout") {
 
       // Only handle a timeout if the Channel is in the 'joining' state
       if (!this.isJoining) return@receive
