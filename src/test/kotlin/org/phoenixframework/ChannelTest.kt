@@ -2,8 +2,10 @@ package org.phoenixframework
 
 import com.google.common.truth.Truth.assertThat
 import com.nhaarman.mockitokotlin2.any
+import com.nhaarman.mockitokotlin2.times
 import com.nhaarman.mockitokotlin2.verify
 import com.nhaarman.mockitokotlin2.whenever
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mock
@@ -12,27 +14,34 @@ import org.mockito.MockitoAnnotations
 class ChannelTest {
 
   @Mock lateinit var socket: Socket
-  @Mock lateinit var reconnectAfterMs: (Int) -> Long
+
 
   private val kDefaultRef = "1"
   private val kDefaultTimeout = 10_000L
   private val kDefaultPayload: Payload = mapOf("one" to "two")
+  private val kEmptyPayload: Payload = mapOf()
+  private val reconnectAfterMs: (Int) -> Long = Defaults.steppedBackOff
 
-  lateinit var dispatchQueue: ManualDispatchQueue
+  lateinit var fakeClock: ManualDispatchQueue
   lateinit var channel: Channel
 
   @Before
   fun setUp() {
     MockitoAnnotations.initMocks(this)
 
-    dispatchQueue = ManualDispatchQueue()
+    fakeClock = ManualDispatchQueue()
 
-    whenever(socket.dispatchQueue).thenReturn(dispatchQueue)
+    whenever(socket.dispatchQueue).thenReturn(fakeClock)
     whenever(socket.makeRef()).thenReturn(kDefaultRef)
     whenever(socket.timeout).thenReturn(kDefaultTimeout)
     whenever(socket.reconnectAfterMs).thenReturn(reconnectAfterMs)
 
     channel = Channel("topic", kDefaultPayload, socket)
+  }
+
+  @After
+  fun tearDown() {
+    fakeClock.reset()
   }
 
   /* constructor */
@@ -142,14 +151,59 @@ class ChannelTest {
     assertThat(joinPush.timeout).isEqualTo(newTimeout)
   }
 
-  /* timeout */
+  /* timeout behavior */
   @Test
   fun `succeeds before timeout`() {
+    val joinPush = channel.joinPush
+    val timeout = channel.timeout
+
     channel.join()
     verify(socket).push(any(), any(), any(), any(), any())
 
+    fakeClock.tick(timeout / 2)
 
+    joinPush.trigger("ok", kEmptyPayload)
+    assertThat(channel.state).isEqualTo(Channel.State.JOINED)
 
+    fakeClock.tick(timeout)
+    verify(socket, times(1)).push(any(), any(), any(), any(), any())
+  }
 
+  @Test
+  fun `retries with backoff after timeout`() {
+    var ref = 0
+    whenever(socket.isConnected).thenReturn(true)
+    whenever(socket.makeRef()).thenAnswer {
+      ref += 1
+      ref.toString()
+    }
+
+    val joinPush = channel.joinPush
+    val timeout = channel.timeout
+
+    channel.join()
+    verify(socket, times(1)).push(any(), any(), any(), any(), any())
+
+    fakeClock.tick(timeout) // leave push sent to the server
+    verify(socket, times(2)).push(any(), any(), any(), any(), any())
+
+    fakeClock.tick(1_000) // begin stepped backoff
+    verify(socket, times(3)).push(any(), any(), any(), any(), any())
+
+    fakeClock.tick(2_000)
+    verify(socket, times(4)).push(any(), any(), any(), any(), any())
+
+    fakeClock.tick(5_000)
+    verify(socket, times(5)).push(any(), any(), any(), any(), any())
+
+    fakeClock.tick(10_000)
+    verify(socket, times(6)).push(any(), any(), any(), any(), any())
+
+    joinPush.trigger("ok", kEmptyPayload)
+    assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+
+    fakeClock.tick(10_000)
+    verify(socket, times(6)).push(any(), any(), any(), any(), any())
+    assertThat(channel.state).isEqualTo(Channel.State.JOINED)
   }
 }

@@ -56,8 +56,7 @@ class Push(
 
     this.startTimeout()
     this.sent = true
-    // TODO: this.channel.socket.push
-    // TODO: weak reference?
+    this.channel.socket.push(channel.topic, event, payload, ref, channel.joinRef)
   }
 
   /**
@@ -152,7 +151,7 @@ class Push(
 
   /** Removes receive hook from Channel regarding this Push */
   private fun cancelRefEvent() {
-    this.refEvent?.let { /* TODO: this.channel.off(it) */ }
+    this.refEvent?.let { this.channel.off(it) }
   }
 
   /** Cancels any ongoing timeout task */

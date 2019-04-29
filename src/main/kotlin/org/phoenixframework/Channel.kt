@@ -139,7 +139,8 @@ class Channel(
       // Send a Push to the server to leave the Channel
       val leavePush = Push(
           channel = this,
-          event = Channel.Event.LEAVE.value)
+          event = Channel.Event.LEAVE.value,
+          timeout = this.timeout)
       leavePush.send()
 
       // Mark the Channel as in an error and attempt to rejoin

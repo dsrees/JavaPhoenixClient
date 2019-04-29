@@ -56,6 +56,7 @@ class ManualDispatchWorkItem(
   override fun cancel() { this.isCancelled = true  }
 
   fun perform() {
+    if (isCancelled) return
     runnable.invoke()
   }
 }
