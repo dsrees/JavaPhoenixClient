@@ -111,7 +111,7 @@ class Channel(
     // Setup Push to be sent when joining
     this.joinPush = Push(
         channel = this,
-        event = Channel.Event.JOIN.value,
+        event = Event.JOIN.value,
         payload = params,
         timeout = timeout)
 
@@ -139,7 +139,7 @@ class Channel(
       // Send a Push to the server to leave the Channel
       val leavePush = Push(
           channel = this,
-          event = Channel.Event.LEAVE.value,
+          event = Event.LEAVE.value,
           timeout = this.timeout)
       leavePush.send()
 
@@ -215,7 +215,7 @@ class Channel(
   //------------------------------------------------------------------------------
   // Public
   //------------------------------------------------------------------------------
-  fun join(timeout: Long = Defaults.TIMEOUT): Push {
+  fun join(timeout: Long = this.timeout): Push {
     // Ensure that `.join()` is called only once per Channel instance
     if (joinedOnce) {
       throw IllegalStateException(
@@ -240,7 +240,7 @@ class Channel(
     this.onMessage = callback
   }
 
-  fun on(event: Channel.Event, callback: (Message) -> Unit): Int {
+  fun on(event: Event, callback: (Message) -> Unit): Int {
     return this.on(event.value, callback)
   }
 
@@ -258,7 +258,7 @@ class Channel(
     }
   }
 
-  fun push(event: String, payload: Payload, timeout: Long = Defaults.TIMEOUT): Push {
+  fun push(event: String, payload: Payload, timeout: Long = this.timeout): Push {
     if (!joinedOnce) {
       // If the Channel has not been joined, throw an exception
       throw RuntimeException(
@@ -277,13 +277,18 @@ class Channel(
     return pushEvent
   }
 
-  fun leave(timeout: Long = Defaults.TIMEOUT): Push {
+  fun leave(timeout: Long = this.timeout): Push {
+    // Can push is dependent upon state == JOINED. Once we set it to LEAVING, then canPush
+    // will return false, so instead store it _before_ starting the leave
+    val canPush = this.canPush
+
+    // Now set the state to leaving
     this.state = State.LEAVING
 
     // Perform the same behavior if the channel leaves successfully or not
     val onClose: ((Message) -> Unit) = {
       this.socket.logItems("Channel: leave $topic")
-      this.trigger(it)
+      this.trigger(Event.CLOSE, mapOf("reason" to "leave"))
     }
 
     // Push event to send to the server
@@ -319,6 +324,15 @@ class Channel(
     }
 
     return true
+  }
+
+  internal fun trigger(
+    event: Event,
+    payload: Payload = hashMapOf(),
+    ref: String = "",
+    joinRef: String? = null
+  ) {
+    this.trigger(event.value, payload, ref, joinRef)
   }
 
   internal fun trigger(
@@ -361,7 +375,7 @@ class Channel(
   }
 
   /** Rejoins the Channel e.g. after a disconnect */
-  private fun rejoin(timeout: Long = Defaults.TIMEOUT) {
+  private fun rejoin(timeout: Long = this.timeout) {
     this.sendJoin(timeout)
   }
 }
