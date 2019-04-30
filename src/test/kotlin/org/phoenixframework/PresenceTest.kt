@@ -12,7 +12,17 @@ class PresenceTest {
 
   @Mock lateinit var socket: Socket
 
-  val listByFirst: (Map.Entry<String, PresenceMap>) -> PresenceMeta =
+  private val fixJoins: PresenceState = mutableMapOf(
+      "u1" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 1, "phx_ref" to "1.2"))))
+  private val fixLeaves: PresenceState = mutableMapOf(
+      "u2" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 2, "phx_ref" to "2"))))
+  private val fixState: PresenceState = mutableMapOf(
+      "u1" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 1, "phx_ref" to "1"))),
+      "u2" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 2, "phx_ref" to "2"))),
+      "u3" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 3, "phx_ref" to "3")))
+  )
+
+  private val listByFirst: (Map.Entry<String, PresenceMap>) -> PresenceMeta =
       { it.value["metas"]!!.first() }
 
   lateinit var channel: Channel
@@ -65,9 +75,9 @@ class PresenceTest {
   @Test
   fun `constructor() syncs state and diffs`() {
     val user1: PresenceMap = mutableMapOf("metas" to mutableListOf(
-        mutableMapOf("id" to 1, "phx_ref" to "1")))
+        mapOf("id" to 1, "phx_ref" to "1")))
     val user2: PresenceMap = mutableMapOf("metas" to mutableListOf(
-        mutableMapOf("id" to 2, "phx_ref" to "2")))
+        mapOf("id" to 2, "phx_ref" to "2")))
     val newState: PresenceState = mutableMapOf("u1" to user1, "u2" to user2)
 
     channel.trigger("presence_state", newState, "1")
@@ -108,32 +118,99 @@ class PresenceTest {
     assertThat(presence.listBy(listByFirst)).isEmpty()
 
     // pending diffs 1
-    assertThat(presence.pendingDiffs).hasSize(1)
-    assertThat(presence.pendingDiffs[0]["joins"]).isEmpty()
-    assertThat(presence.pendingDiffs[0]["leaves"]).isEqualTo(leaves)
+//    assertThat(presence.pendingDiffs).hasSize(1)
+//    assertThat(presence.pendingDiffs[0]["joins"]).isEmpty()
+//    assertThat(presence.pendingDiffs[0]["leaves"]).isEqualTo(leaves)
+//
+//    channel.trigger("presence_state", newState, "")
+//    assertThat(onLeaves).hasSize(1)
+//    assertThat(onLeaves[0].first).isEqualTo("u2")
+//    assertThat(onLeaves[0].second["metas"]).isEmpty()
+//    assertThat(onLeaves[0].third["metas"]!![0]["id"]).isEqualTo(2)
+//
+//    val s = presence.listBy(listByFirst)
+//    assertThat(s).hasSize(1)
+//    assertThat(s[0]["id"]).isEqualTo(1)
+//    assertThat(s[0]["phx_ref"]).isEqualTo("1")
+//    assertThat(presence.pendingDiffs).isEmpty()
+//
+//    assertThat(onJoins).hasSize(2)
+//    assertThat(onJoins[0].first).isEqualTo("u1")
+//    assertThat(onJoins[0].second).isNull()
+//    assertThat(onJoins[0].third["metas"]!![0]["id"]).isEqualTo(1)
+//
+//    assertThat(onJoins[1].first).isEqualTo("u2")
+//    assertThat(onJoins[1].second).isNull()
+//    assertThat(onJoins[1].third["metas"]!![0]["id"]).isEqualTo(2)
+  }
 
-    channel.trigger("presence_state", newState, "")
-    assertThat(onLeaves).hasSize(1)
-    assertThat(onLeaves[0].first).isEqualTo("u2")
-    assertThat(onLeaves[0].second["metas"]).isEmpty()
-    assertThat(onLeaves[0].third["metas"]!![0]["id"]).isEqualTo(2)
+  /* sync state */
+  @Test
+  fun `syncState() syncs empty state`() {
+    val newState: PresenceState = mutableMapOf(
+        "u1" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 1, "phx_ref" to "1"))))
+    var state: PresenceState = mutableMapOf()
+    val stateBefore = state
 
-    val s = presence.listBy(listByFirst)
-    assertThat(s).hasSize(1)
-    assertThat(s[0]["id"]).isEqualTo(1)
-    assertThat(s[0]["phx_ref"]).isEqualTo("1")
-    assertThat(presence.pendingDiffs).isEmpty()
+    Presence.syncState(state, newState)
+    assertThat(state).isEqualTo(stateBefore)
 
-    assertThat(onJoins).hasSize(2)
-    assertThat(onJoins[0].first).isEqualTo("u1")
-    assertThat(onJoins[0].second).isNull()
-    assertThat(onJoins[0].third["metas"]!![0]["id"]).isEqualTo(1)
+    state = Presence.syncState(state, newState)
+    assertThat(state).isEqualTo(newState)
+  }
 
-    assertThat(onJoins[1].first).isEqualTo("u2")
-    assertThat(onJoins[1].second).isNull()
-    assertThat(onJoins[1].third["metas"]!![0]["id"]).isEqualTo(2)
+  @Test
+  fun `syncState() onJoins new presences and onLeaves left presences`() {
+    val newState = fixState
+    var state = mutableMapOf(
+        "u4" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 4, "phx_ref" to "4"))))
 
+    val joined: PresenceDiff = mutableMapOf()
+    val left: PresenceDiff = mutableMapOf()
 
+    val onJoin: OnJoin = { key, current, newPres ->
+      val joinState: PresenceState = mutableMapOf("newPres" to newPres)
+      current?.let { c -> joinState["current"] = c }
+
+      joined[key] = joinState
+    }
+
+    val onLeave: OnLeave = { key, current, leftPres ->
+      left[key] = mutableMapOf("current" to current, "leftPres" to leftPres)
+    }
+
+    val stateBefore = state.toMap()
+    Presence.syncState(state, newState, onJoin, onLeave)
+    assertThat(state).isEqualTo(stateBefore)
+
+    state = Presence.syncState(state, newState, onJoin, onLeave)
+    assertThat(state).isEqualTo(newState)
+
+    // asset equality in joined
+    val joinedExpectation: PresenceDiff = mutableMapOf(
+        "u1" to mutableMapOf("newPres" to mutableMapOf(
+            "metas" to mutableListOf(mapOf("id" to 1, "phx_ref" to "1")))),
+        "u2" to mutableMapOf("newPres" to mutableMapOf(
+            "metas" to mutableListOf(mapOf("id" to 2, "phx_ref" to "2")))),
+        "u3" to mutableMapOf("newPres" to mutableMapOf(
+            "metas" to mutableListOf(mapOf("id" to 3, "phx_ref" to "3"))))
+    )
+
+    assertThat(joined).isEqualTo(joinedExpectation)
+
+    // assert equality in left
+    val leftExpectation: PresenceDiff = mutableMapOf(
+        "u4" to mutableMapOf(
+            "current" to mutableMapOf(
+                "metas" to mutableListOf()),
+            "leftPres" to mutableMapOf(
+                "metas" to mutableListOf(mapOf("id" to 4, "phx_ref" to "4"))))
+    )
+    assertThat(left).isEqualTo(leftExpectation)
+  }
+
+  @Test
+  fun `syncState() onJoins only newly added metas`() {
 
   }
 }

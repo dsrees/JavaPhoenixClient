@@ -4,7 +4,7 @@ package org.phoenixframework
 // Type Aliases
 //------------------------------------------------------------------------------
 /** Meta details of a Presence. Just a dictionary of properties */
-typealias PresenceMeta = MutableMap<String, Any>
+typealias PresenceMeta = Map<String, Any>
 
 /** A mapping of a String to an array of Metas. e.g. {"metas": [{id: 1}]} */
 typealias PresenceMap = MutableMap<String, MutableList<PresenceMeta>>
@@ -178,7 +178,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       onJoin: OnJoin = { _, _, _ -> },
       onLeave: OnLeave = { _, _, _ -> }
     ): PresenceState {
-      val state = currentState
+      val state = currentState.toMutableMap()
       val leaves: PresenceState = mutableMapOf()
       val joins: PresenceState = mutableMapOf()
 
@@ -190,8 +190,8 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
 
       newState.forEach { (key, newPresence) ->
         state[key]?.let { currentPresence ->
-          val newRefs = newPresence["metas"]!!.map { meta -> meta["phx"] as String }
-          val curRefs = currentPresence["metas"]!!.map { meta -> meta["phx"] as String }
+          val newRefs = newPresence["metas"]!!.map { meta -> meta["phx_ref"] as String }
+          val curRefs = currentPresence["metas"]!!.map { meta -> meta["phx_ref"] as String }
 
           val joinedMetas = newPresence["metas"]!!.filter { meta ->
             curRefs.indexOf(meta["phx_ref"]) < 0
