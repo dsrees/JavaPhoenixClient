@@ -13,13 +13,13 @@ class PresenceTest {
   @Mock lateinit var socket: Socket
 
   private val fixJoins: PresenceState = mutableMapOf(
-      "u1" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 1, "phx_ref" to "1.2"))))
+      "u1" to mutableMapOf("metas" to listOf(mapOf("id" to 1, "phx_ref" to "1.2"))))
   private val fixLeaves: PresenceState = mutableMapOf(
-      "u2" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 2, "phx_ref" to "2"))))
+      "u2" to mutableMapOf("metas" to listOf(mapOf("id" to 2, "phx_ref" to "2"))))
   private val fixState: PresenceState = mutableMapOf(
-      "u1" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 1, "phx_ref" to "1"))),
-      "u2" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 2, "phx_ref" to "2"))),
-      "u3" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 3, "phx_ref" to "3")))
+      "u1" to mutableMapOf("metas" to listOf(mapOf("id" to 1, "phx_ref" to "1"))),
+      "u2" to mutableMapOf("metas" to listOf(mapOf("id" to 2, "phx_ref" to "2"))),
+      "u3" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3")))
   )
 
   private val listByFirst: (Map.Entry<String, PresenceMap>) -> PresenceMeta =
@@ -148,7 +148,7 @@ class PresenceTest {
   @Test
   fun `syncState() syncs empty state`() {
     val newState: PresenceState = mutableMapOf(
-        "u1" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 1, "phx_ref" to "1"))))
+        "u1" to mutableMapOf("metas" to listOf(mapOf("id" to 1, "phx_ref" to "1"))))
     var state: PresenceState = mutableMapOf()
     val stateBefore = state
 
@@ -163,7 +163,7 @@ class PresenceTest {
   fun `syncState() onJoins new presences and onLeaves left presences`() {
     val newState = fixState
     var state = mutableMapOf(
-        "u4" to mutableMapOf("metas" to mutableListOf(mapOf("id" to 4, "phx_ref" to "4"))))
+        "u4" to mutableMapOf("metas" to listOf(mapOf("id" to 4, "phx_ref" to "4"))))
 
     val joined: PresenceDiff = mutableMapOf()
     val left: PresenceDiff = mutableMapOf()
@@ -189,11 +189,11 @@ class PresenceTest {
     // asset equality in joined
     val joinedExpectation: PresenceDiff = mutableMapOf(
         "u1" to mutableMapOf("newPres" to mutableMapOf(
-            "metas" to mutableListOf(mapOf("id" to 1, "phx_ref" to "1")))),
+            "metas" to listOf(mapOf("id" to 1, "phx_ref" to "1")))),
         "u2" to mutableMapOf("newPres" to mutableMapOf(
-            "metas" to mutableListOf(mapOf("id" to 2, "phx_ref" to "2")))),
+            "metas" to listOf(mapOf("id" to 2, "phx_ref" to "2")))),
         "u3" to mutableMapOf("newPres" to mutableMapOf(
-            "metas" to mutableListOf(mapOf("id" to 3, "phx_ref" to "3"))))
+            "metas" to listOf(mapOf("id" to 3, "phx_ref" to "3"))))
     )
 
     assertThat(joined).isEqualTo(joinedExpectation)
@@ -204,13 +204,90 @@ class PresenceTest {
             "current" to mutableMapOf(
                 "metas" to mutableListOf()),
             "leftPres" to mutableMapOf(
-                "metas" to mutableListOf(mapOf("id" to 4, "phx_ref" to "4"))))
+                "metas" to listOf(mapOf("id" to 4, "phx_ref" to "4"))))
     )
     assertThat(left).isEqualTo(leftExpectation)
   }
 
   @Test
   fun `syncState() onJoins only newly added metas`() {
+    var state = mutableMapOf(
+        "u3" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3"))))
+    val newState = mutableMapOf(
+        "u3" to mutableMapOf("metas" to listOf(
+            mapOf("id" to 3, "phx_ref" to "3"),
+            mapOf("id" to 3, "phx_ref" to "3.new")
+        )))
 
+    val joined: PresenceDiff = mutableMapOf()
+    val left: PresenceDiff = mutableMapOf()
+
+    val onJoin: OnJoin = { key, current, newPres ->
+      val joinState: PresenceState = mutableMapOf("newPres" to newPres)
+      current?.let { c -> joinState["current"] = c }
+
+      joined[key] = joinState
+    }
+
+    val onLeave: OnLeave = { key, current, leftPres ->
+      left[key] = mutableMapOf("current" to current, "leftPres" to leftPres)
+    }
+
+    state = Presence.syncState(state, newState, onJoin, onLeave)
+    assertThat(state).isEqualTo(newState)
+
+    // asset equality in joined
+    val joinedExpectation: PresenceDiff = mutableMapOf(
+        "u3" to mutableMapOf(
+            "newPres" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3"), mapOf("id" to 3, "phx_ref" to "3.new"))),
+            "current" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3")))
+
+
+        ))
+    assertThat(joined).isEqualTo(joinedExpectation)
+
+    // assert equality in left
+    assertThat(left).isEmpty()
+  }
+
+  @Test
+  fun `syncState() onLeaves only newly removed metas`() {
+    val newState = mutableMapOf(
+        "u3" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3"))))
+    var state = mutableMapOf(
+        "u3" to mutableMapOf("metas" to listOf(
+            mapOf("id" to 3, "phx_ref" to "3"),
+            mapOf("id" to 3, "phx_ref" to "3.left")
+        )))
+
+    val joined: PresenceDiff = mutableMapOf()
+    val left: PresenceDiff = mutableMapOf()
+
+    val onJoin: OnJoin = { key, current, newPres ->
+      val joinState: PresenceState = mutableMapOf("newPres" to newPres)
+      current?.let { c -> joinState["current"] = c }
+
+      joined[key] = joinState
+    }
+
+    val onLeave: OnLeave = { key, current, leftPres ->
+      left[key] = mutableMapOf("current" to current, "leftPres" to leftPres)
+    }
+
+    state = Presence.syncState(state, newState, onJoin, onLeave)
+    assertThat(state).isEqualTo(newState)
+
+    // asset equality in joined
+    val leftExpectation: PresenceDiff = mutableMapOf(
+        "u3" to mutableMapOf(
+            "leftPres" to mutableMapOf("metas" to listOf( mapOf("id" to 3, "phx_ref" to "3.left"))),
+            "current" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3")))
+
+
+        ))
+    assertThat(left).isEqualTo(leftExpectation)
+
+    // assert equality in left
+    assertThat(joined).isEmpty()
   }
 }

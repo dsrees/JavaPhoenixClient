@@ -7,7 +7,7 @@ package org.phoenixframework
 typealias PresenceMeta = Map<String, Any>
 
 /** A mapping of a String to an array of Metas. e.g. {"metas": [{id: 1}]} */
-typealias PresenceMap = MutableMap<String, MutableList<PresenceMeta>>
+typealias PresenceMap = MutableMap<String, List<PresenceMeta>>
 
 /** A mapping of a Presence state to a mapping of Metas */
 typealias PresenceState = MutableMap<String, PresenceMap>
@@ -201,12 +201,12 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
           }
 
           if (joinedMetas.isNotEmpty()) {
-            joins[key] = newPresence
+            joins[key] = newPresence.toMutableMap()
             joins[key]!!["metas"] = joinedMetas.toMutableList()
           }
 
           if (leftMetas.isNotEmpty()) {
-            leaves[key] = currentPresence
+            leaves[key] = currentPresence.toMutableMap()
             leaves[key]!!["metas"] = leftMetas.toMutableList()
           }
         } ?: run {
@@ -230,7 +230,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       onJoin: OnJoin = { _, _, _ -> },
       onLeave: OnLeave = { _, _, _ -> }
     ): PresenceState {
-      val state = currentState
+      val state = currentState.toMutableMap()
 
       // Sync the joined states and inform onJoin of new presence
       diff["joins"]?.forEach { key, newPresence ->
@@ -241,7 +241,12 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
           val joinedRefs = state[key]!!["metas"]!!.map { m -> m["phx_ref"] as String }
           val curMetas = curPresence["metas"]!!.filter { m -> joinedRefs.indexOf(m["phx_ref"]) < 0 }
 
-          state[key]!!["metas"]!!.addAll(0, curMetas)
+          // Data structures are immutable. Need to convert to a mutable copy,
+          // add the metas, and then reassign to the state
+          val mutableMetas = state[key]!!["metas"]!!.toMutableList()
+          mutableMetas.addAll(0, curMetas)
+
+          state[key]!!["metas"] = mutableMetas
         }
 
         onJoin.invoke(key, currentPresence, newPresence)
@@ -249,18 +254,14 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
 
       // Sync the left diff and inform onLeave of left presence
       diff["leaves"]?.forEach { key, leftPresence ->
-        val curPresence = state[key] ?: return@forEach
+        val curPresence = state[key]?.toMutableMap() ?: return@forEach
 
         val refsToRemove = leftPresence["metas"]!!.map { it["phx_ref"] as String }
-        val keepMetas =
+        curPresence["metas"] =
             curPresence["metas"]!!.filter { m -> refsToRemove.indexOf(m["phx_ref"]) < 0 }
 
-        curPresence["metas"] = keepMetas.toMutableList()
         onLeave.invoke(key, curPresence, leftPresence)
-
-        if (keepMetas.isNotEmpty()) {
-          state[key]!!["metas"] = keepMetas.toMutableList()
-        } else {
+        if (curPresence["metas"]?.isEmpty() == true) {
           state.remove(key)
         }
       }
