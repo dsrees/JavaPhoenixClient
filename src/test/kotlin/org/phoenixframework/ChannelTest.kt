@@ -57,14 +57,6 @@ class ChannelTest {
   }
 
   //------------------------------------------------------------------------------
-  // Utility Methods
-  //------------------------------------------------------------------------------
-  /// Utility method to easily filter the bindings for a channel by their event
-  private fun getBindings(event: String): List<Binding>? {
-    return channel.bindings.toList().filter { it.event == event }
-  }
-
-  //------------------------------------------------------------------------------
   // Channel.Event
   //------------------------------------------------------------------------------
   @Test
@@ -75,7 +67,7 @@ class ChannelTest {
     assertThat(Channel.Event.isLifecycleEvent(Channel.Event.REPLY.value)).isTrue()
     assertThat(Channel.Event.isLifecycleEvent(Channel.Event.ERROR.value)).isTrue()
     assertThat(Channel.Event.isLifecycleEvent(Channel.Event.CLOSE.value)).isTrue()
-    assertThat(Channel.Event.isLifecycleEvent("random")).isTrue()
+    assertThat(Channel.Event.isLifecycleEvent("random")).isFalse()
 
   }
   //------------------------------------------------------------------------------
@@ -400,11 +392,11 @@ class ChannelTest {
     setupJoinPushTests()
     val joinPush = channel.joinPush
 
-    var bindings = getBindings("chan_reply_1")
+    var bindings = channel.getBindings("chan_reply_1")
     assertThat(bindings).hasSize(1)
 
     receivesOk(joinPush)
-    bindings = getBindings("chan_reply_1")
+    bindings = channel.getBindings("chan_reply_1")
     assertThat(bindings).isEmpty()
   }
 
@@ -558,11 +550,11 @@ class ChannelTest {
     setupJoinPushTests()
     val joinPush = channel.joinPush
 
-    var bindings = getBindings("chan_reply_1")
+    var bindings = channel.getBindings("chan_reply_1")
     assertThat(bindings).hasSize(1)
 
     receivesError(joinPush)
-    bindings = getBindings("chan_reply_1")
+    bindings = channel.getBindings("chan_reply_1")
     assertThat(bindings).isEmpty()
   }
 

@@ -2,6 +2,9 @@ package org.phoenixframework
 
 import java.util.concurrent.TimeUnit
 
+//------------------------------------------------------------------------------
+// Dispatch Queue
+//------------------------------------------------------------------------------
 class ManualDispatchQueue : DispatchQueue {
 
   private var tickTime: Long = 0
@@ -35,7 +38,7 @@ class ManualDispatchQueue : DispatchQueue {
 
 
   override fun queue(delay: Long, unit: TimeUnit, runnable: () -> Unit): DispatchWorkItem {
-      // Converts the given unit and delay to the unit used by this class
+    // Converts the given unit and delay to the unit used by this class
     val delayInMs = tickTimeUnit.convert(delay, unit)
     val deadline = tickTime + delayInMs
 
@@ -46,6 +49,9 @@ class ManualDispatchQueue : DispatchQueue {
   }
 }
 
+//------------------------------------------------------------------------------
+// Work Item
+//------------------------------------------------------------------------------
 class ManualDispatchWorkItem(
   private val runnable: () -> Unit,
   val deadline: Long
@@ -59,4 +65,11 @@ class ManualDispatchWorkItem(
     if (isCancelled) return
     runnable.invoke()
   }
+}
+
+//------------------------------------------------------------------------------
+// Channel Extension
+//------------------------------------------------------------------------------
+fun Channel.getBindings(event: String): List<Binding> {
+  return bindings.toList().filter { it.event == event }
 }

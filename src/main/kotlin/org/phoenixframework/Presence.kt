@@ -67,10 +67,10 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
   // Properties
   //------------------------------------------------------------------------------
   /** The channel the Presence belongs to */
-  private val channel: Channel
+  internal val channel: Channel
 
   /** Caller to callback hooks */
-  private val caller: Caller
+  internal val caller: Caller
 
   /** The state of the Presence */
   var state: PresenceState
@@ -96,7 +96,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
     this.pendingDiffs = mutableListOf()
     this.channel = channel
     this.joinRef = null
-    this.caller = Presence.Caller()
+    this.caller = Caller()
 
     val stateEvent = opts.events[Events.STATE]
     val diffEvent = opts.events[Events.DIFF]
@@ -112,7 +112,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
 
 
         this.pendingDiffs.forEach { diff ->
-          this.state = Presence.syncDiff(state, diff, caller.onJoin, caller.onLeave)
+          this.state = syncDiff(state, diff, caller.onJoin, caller.onLeave)
         }
 
         this.pendingDiffs.clear()
@@ -124,7 +124,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
         if (isPendingSyncState) {
           this.pendingDiffs.add(diff)
         } else {
-          this.state = Presence.syncDiff(state, diff, caller.onJoin, caller.onLeave)
+          this.state = syncDiff(state, diff, caller.onJoin, caller.onLeave)
           this.caller.onSync()
         }
       }
@@ -182,13 +182,13 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       val leaves: PresenceState = mutableMapOf()
       val joins: PresenceState = mutableMapOf()
 
-      state.forEach { key, presence ->
+      state.forEach { (key, presence) ->
         if (!newState.containsKey(key)) {
           leaves[key] = presence
         }
       }
 
-      newState.forEach { key, newPresence ->
+      newState.forEach { (key, newPresence) ->
         state[key]?.let { currentPresence ->
           val newRefs = newPresence["metas"]!!.map { meta -> meta["phx"] as String }
           val curRefs = currentPresence["metas"]!!.map { meta -> meta["phx"] as String }
@@ -215,7 +215,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       }
 
       val diff: PresenceDiff = mutableMapOf("joins" to joins, "leaves" to leaves)
-      return Presence.syncDiff(state, diff, onJoin, onLeave)
+      return syncDiff(state, diff, onJoin, onLeave)
 
     }
 
