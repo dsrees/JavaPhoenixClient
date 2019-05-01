@@ -166,6 +166,19 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
   //------------------------------------------------------------------------------
   companion object {
 
+    private fun cloneMap(map: PresenceMap): PresenceMap {
+      val clone: PresenceMap = mutableMapOf()
+      map.forEach { entry -> clone[entry.key] = entry.value.toList() }
+      return clone
+    }
+
+    private fun cloneState(state: PresenceState): PresenceState {
+      val clone: PresenceState = mutableMapOf()
+      state.forEach { entry -> clone[entry.key] = cloneMap(entry.value) }
+      return clone
+    }
+
+
     /**
      * Used to sync the list of presences on the server with the client's state. An optional
      * `onJoin` and `onLeave` callback can be provided to react to changes in the client's local
@@ -178,7 +191,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       onJoin: OnJoin = { _, _, _ -> },
       onLeave: OnLeave = { _, _, _ -> }
     ): PresenceState {
-      val state = currentState.toMutableMap()
+      val state = cloneState(currentState)
       val leaves: PresenceState = mutableMapOf()
       val joins: PresenceState = mutableMapOf()
 
@@ -201,13 +214,13 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
           }
 
           if (joinedMetas.isNotEmpty()) {
-            joins[key] = newPresence.toMutableMap()
-            joins[key]!!["metas"] = joinedMetas.toMutableList()
+            joins[key] = cloneMap(newPresence)
+            joins[key]!!["metas"] = joinedMetas
           }
 
           if (leftMetas.isNotEmpty()) {
-            leaves[key] = currentPresence.toMutableMap()
-            leaves[key]!!["metas"] = leftMetas.toMutableList()
+            leaves[key] = cloneMap(currentPresence)
+            leaves[key]!!["metas"] = leftMetas
           }
         } ?: run {
           joins[key] = newPresence
@@ -230,12 +243,12 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       onJoin: OnJoin = { _, _, _ -> },
       onLeave: OnLeave = { _, _, _ -> }
     ): PresenceState {
-      val state = currentState.toMutableMap()
+      val state = cloneState(currentState)
 
       // Sync the joined states and inform onJoin of new presence
       diff["joins"]?.forEach { key, newPresence ->
         val currentPresence = state[key]
-        state[key] = newPresence
+        state[key] = cloneMap(newPresence)
 
         currentPresence?.let { curPresence ->
           val joinedRefs = state[key]!!["metas"]!!.map { m -> m["phx_ref"] as String }
@@ -254,7 +267,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
 
       // Sync the left diff and inform onLeave of left presence
       diff["leaves"]?.forEach { key, leftPresence ->
-        val curPresence = state[key]?.toMutableMap() ?: return@forEach
+        val curPresence = state[key] ?: return@forEach
 
         val refsToRemove = leftPresence["metas"]!!.map { it["phx_ref"] as String }
         curPresence["metas"] =

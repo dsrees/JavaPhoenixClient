@@ -118,30 +118,30 @@ class PresenceTest {
     assertThat(presence.listBy(listByFirst)).isEmpty()
 
     // pending diffs 1
-//    assertThat(presence.pendingDiffs).hasSize(1)
-//    assertThat(presence.pendingDiffs[0]["joins"]).isEmpty()
-//    assertThat(presence.pendingDiffs[0]["leaves"]).isEqualTo(leaves)
-//
-//    channel.trigger("presence_state", newState, "")
-//    assertThat(onLeaves).hasSize(1)
-//    assertThat(onLeaves[0].first).isEqualTo("u2")
-//    assertThat(onLeaves[0].second["metas"]).isEmpty()
-//    assertThat(onLeaves[0].third["metas"]!![0]["id"]).isEqualTo(2)
-//
-//    val s = presence.listBy(listByFirst)
-//    assertThat(s).hasSize(1)
-//    assertThat(s[0]["id"]).isEqualTo(1)
-//    assertThat(s[0]["phx_ref"]).isEqualTo("1")
-//    assertThat(presence.pendingDiffs).isEmpty()
-//
-//    assertThat(onJoins).hasSize(2)
-//    assertThat(onJoins[0].first).isEqualTo("u1")
-//    assertThat(onJoins[0].second).isNull()
-//    assertThat(onJoins[0].third["metas"]!![0]["id"]).isEqualTo(1)
-//
-//    assertThat(onJoins[1].first).isEqualTo("u2")
-//    assertThat(onJoins[1].second).isNull()
-//    assertThat(onJoins[1].third["metas"]!![0]["id"]).isEqualTo(2)
+    assertThat(presence.pendingDiffs).hasSize(1)
+    assertThat(presence.pendingDiffs[0]["joins"]).isEmpty()
+    assertThat(presence.pendingDiffs[0]["leaves"]).isEqualTo(leaves)
+
+    channel.trigger("presence_state", newState, "")
+    assertThat(onLeaves).hasSize(1)
+    assertThat(onLeaves[0].first).isEqualTo("u2")
+    assertThat(onLeaves[0].second["metas"]).isEmpty()
+    assertThat(onLeaves[0].third["metas"]!![0]["id"]).isEqualTo(2)
+
+    val s = presence.listBy(listByFirst)
+    assertThat(s).hasSize(1)
+    assertThat(s[0]["id"]).isEqualTo(1)
+    assertThat(s[0]["phx_ref"]).isEqualTo("1")
+    assertThat(presence.pendingDiffs).isEmpty()
+
+    assertThat(onJoins).hasSize(2)
+    assertThat(onJoins[0].first).isEqualTo("u1")
+    assertThat(onJoins[0].second).isNull()
+    assertThat(onJoins[0].third["metas"]!![0]["id"]).isEqualTo(1)
+
+    assertThat(onJoins[1].first).isEqualTo("u2")
+    assertThat(onJoins[1].second).isNull()
+    assertThat(onJoins[1].third["metas"]!![0]["id"]).isEqualTo(2)
   }
 
   /* sync state */
@@ -179,7 +179,7 @@ class PresenceTest {
       left[key] = mutableMapOf("current" to current, "leftPres" to leftPres)
     }
 
-    val stateBefore = state.toMap()
+    val stateBefore = state
     Presence.syncState(state, newState, onJoin, onLeave)
     assertThat(state).isEqualTo(stateBefore)
 
@@ -239,9 +239,8 @@ class PresenceTest {
     // asset equality in joined
     val joinedExpectation: PresenceDiff = mutableMapOf(
         "u3" to mutableMapOf(
-            "newPres" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3"), mapOf("id" to 3, "phx_ref" to "3.new"))),
+            "newPres" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3.new"))),
             "current" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3")))
-
 
         ))
     assertThat(joined).isEqualTo(joinedExpectation)
@@ -280,14 +279,122 @@ class PresenceTest {
     // asset equality in joined
     val leftExpectation: PresenceDiff = mutableMapOf(
         "u3" to mutableMapOf(
-            "leftPres" to mutableMapOf("metas" to listOf( mapOf("id" to 3, "phx_ref" to "3.left"))),
+            "leftPres" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3.left"))),
             "current" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3")))
-
 
         ))
     assertThat(left).isEqualTo(leftExpectation)
 
     // assert equality in left
     assertThat(joined).isEmpty()
+  }
+
+  @Test
+  fun `syncState() syncs both joined and left metas`() {
+
+    val newState = mutableMapOf(
+        "u3" to mutableMapOf("metas" to listOf(
+            mapOf("id" to 3, "phx_ref" to "3"),
+            mapOf("id" to 3, "phx_ref" to "3.new")
+        )))
+
+    var state= mutableMapOf(
+        "u3" to mutableMapOf("metas" to listOf(
+            mapOf("id" to 3, "phx_ref" to "3"),
+            mapOf("id" to 3, "phx_ref" to "3.left")
+        )))
+
+    val joined: PresenceDiff = mutableMapOf()
+    val left: PresenceDiff = mutableMapOf()
+
+    val onJoin: OnJoin = { key, current, newPres ->
+      val joinState: PresenceState = mutableMapOf("newPres" to newPres)
+      current?.let { c -> joinState["current"] = c }
+
+      joined[key] = joinState
+    }
+
+    val onLeave: OnLeave = { key, current, leftPres ->
+      left[key] = mutableMapOf("current" to current, "leftPres" to leftPres)
+    }
+
+    state = Presence.syncState(state, newState, onJoin, onLeave)
+    assertThat(state).isEqualTo(newState)
+
+    // asset equality in joined
+    val joinedExpectation: PresenceDiff = mutableMapOf(
+        "u3" to mutableMapOf(
+            "newPres" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3.new"))),
+            "current" to mutableMapOf("metas" to listOf(
+                mapOf("id" to 3, "phx_ref" to "3"),
+                mapOf("id" to 3, "phx_ref" to "3.left")))
+        ))
+    assertThat(joined).isEqualTo(joinedExpectation)
+
+    // assert equality in left
+    val leftExpectation: PresenceDiff = mutableMapOf(
+        "u3" to mutableMapOf(
+            "leftPres" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3.left"))),
+            "current" to mutableMapOf("metas" to listOf(
+                mapOf("id" to 3, "phx_ref" to "3"),
+                mapOf("id" to 3, "phx_ref" to "3.new")))
+        ))
+    assertThat(left).isEqualTo(leftExpectation)
+  }
+
+  /* syncDiff */
+  @Test
+  fun `syncDiff() syncs empty state`() {
+    val joins: PresenceState = mutableMapOf(
+        "u1" to mutableMapOf("metas" to
+            listOf(mapOf("id" to 1, "phx_ref" to "1"))))
+    var state: PresenceState = mutableMapOf()
+
+    Presence.syncDiff(state, mutableMapOf("joins" to joins, "leaves" to mutableMapOf()))
+    assertThat(state).isEmpty()
+
+    state = Presence.syncDiff(state, mutableMapOf("joins" to joins, "leaves" to mutableMapOf()))
+    assertThat(state).isEqualTo(joins)
+  }
+
+  @Test
+  fun `syncDiff() removes presence when meta is empty and adds additional meta`() {
+    var state = fixState
+    val diff: PresenceDiff = mutableMapOf("joins" to fixJoins, "leaves" to fixLeaves)
+    state = Presence.syncDiff(state, diff)
+
+    val expectation: PresenceState = mutableMapOf(
+        "u1" to mutableMapOf("metas" to
+            listOf(
+                mapOf("id" to 1, "phx_ref" to "1"),
+                mapOf("id" to 1, "phx_ref" to "1.2")
+            )
+        ),
+        "u3" to mutableMapOf("metas" to
+            listOf(mapOf("id" to 3, "phx_ref" to "3"))
+        )
+    )
+
+    assertThat(state).isEqualTo(expectation)
+  }
+
+  @Test
+  fun `syncDiff() removes meta while leaving key if other metas exist`() {
+    var state = mutableMapOf(
+        "u1" to mutableMapOf("metas" to listOf(
+            mapOf("id" to 1, "phx_ref" to "1"),
+            mapOf("id" to 1, "phx_ref" to "1.2")
+        )))
+
+    val leaves = mutableMapOf(
+        "u1" to mutableMapOf("metas" to listOf(
+            mapOf("id" to 1, "phx_ref" to "1")
+        )))
+    val diff: PresenceDiff = mutableMapOf("joins" to mutableMapOf(), "leaves" to leaves)
+    state = Presence.syncDiff(state, diff)
+
+    val expectedState = mutableMapOf(
+        "u1" to mutableMapOf("metas" to listOf(mapOf("id" to 1, "phx_ref" to "1.2"))))
+    assertThat(state).isEqualTo(expectedState)
   }
 }
