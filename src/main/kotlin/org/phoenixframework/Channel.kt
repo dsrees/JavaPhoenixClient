@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2019 Daniel Rees <daniel.rees18@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 package org.phoenixframework
 
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -16,7 +38,7 @@ data class Binding(
  */
 class Channel(
   val topic: String,
-  var params: Payload,
+  params: Payload,
   internal val socket: Socket
 ) {
 
@@ -60,7 +82,7 @@ class Channel(
   // Channel Attributes
   //------------------------------------------------------------------------------
   /** Current state of the Channel */
-  internal var state: Channel.State
+  internal var state: State
 
   /** Collection of event bindings. */
   internal val bindings: ConcurrentLinkedQueue<Binding>
@@ -71,23 +93,30 @@ class Channel(
   /** Timeout when attempting to join a Channel */
   internal var timeout: Long
 
+  /** Params passed in through constructions and provided to the JoinPush */
+  var params: Payload = params
+    set(value) {
+      joinPush.payload = value
+      field = value
+    }
+
   /** Set to true once the channel has attempted to join */
-  var joinedOnce: Boolean
+  internal var joinedOnce: Boolean
 
   /** Push to send then attempting to join */
-  var joinPush: Push
+  internal var joinPush: Push
 
   /** Buffer of Pushes that will be sent once the Channel's socket connects */
-  var pushBuffer: MutableList<Push>
+  internal var pushBuffer: MutableList<Push>
 
   /** Timer to attempt rejoins */
-  var rejoinTimer: TimeoutTimer
+  internal var rejoinTimer: TimeoutTimer
 
   /**
    * Optional onMessage hook that can be provided. Receives all event messages for specialized
    * handling before dispatching to the Channel event callbacks.
    */
-  var onMessage: (Message) -> Message = { it }
+  internal var onMessage: (Message) -> Message = { it }
 
   init {
     this.state = State.CLOSED
@@ -97,14 +126,14 @@ class Channel(
     this.joinedOnce = false
     this.pushBuffer = mutableListOf()
     this.rejoinTimer = TimeoutTimer(
-        scheduledExecutorService = socket.timerPool,
+        dispatchQueue = socket.dispatchQueue,
         callback = { rejoinUntilConnected() },
-        timerCalculation = Defaults.steppedBackOff)
+        timerCalculation = socket.reconnectAfterMs)
 
     // Setup Push to be sent when joining
     this.joinPush = Push(
         channel = this,
-        event = Channel.Event.JOIN.value,
+        event = Event.JOIN.value,
         payload = params,
         timeout = timeout)
 
@@ -122,7 +151,7 @@ class Channel(
     }
 
     // Perform if Channel timed out while attempting to join
-    this.joinPush.receive("timeout") { message ->
+    this.joinPush.receive("timeout") {
 
       // Only handle a timeout if the Channel is in the 'joining' state
       if (!this.isJoining) return@receive
@@ -132,7 +161,8 @@ class Channel(
       // Send a Push to the server to leave the Channel
       val leavePush = Push(
           channel = this,
-          event = Channel.Event.LEAVE.value)
+          event = Event.LEAVE.value,
+          timeout = this.timeout)
       leavePush.send()
 
       // Mark the Channel as in an error and attempt to rejoin
@@ -207,7 +237,7 @@ class Channel(
   //------------------------------------------------------------------------------
   // Public
   //------------------------------------------------------------------------------
-  fun join(timeout: Long = Defaults.TIMEOUT): Push {
+  fun join(timeout: Long = this.timeout): Push {
     // Ensure that `.join()` is called only once per Channel instance
     if (joinedOnce) {
       throw IllegalStateException(
@@ -232,7 +262,7 @@ class Channel(
     this.onMessage = callback
   }
 
-  fun on(event: Channel.Event, callback: (Message) -> Unit): Int {
+  fun on(event: Event, callback: (Message) -> Unit): Int {
     return this.on(event.value, callback)
   }
 
@@ -250,7 +280,7 @@ class Channel(
     }
   }
 
-  fun push(event: String, payload: Payload, timeout: Long = Defaults.TIMEOUT): Push {
+  fun push(event: String, payload: Payload, timeout: Long = this.timeout): Push {
     if (!joinedOnce) {
       // If the Channel has not been joined, throw an exception
       throw RuntimeException(
@@ -269,13 +299,18 @@ class Channel(
     return pushEvent
   }
 
-  fun leave(timeout: Long = Defaults.TIMEOUT): Push {
+  fun leave(timeout: Long = this.timeout): Push {
+    // Can push is dependent upon state == JOINED. Once we set it to LEAVING, then canPush
+    // will return false, so instead store it _before_ starting the leave
+    val canPush = this.canPush
+
+    // Now set the state to leaving
     this.state = State.LEAVING
 
     // Perform the same behavior if the channel leaves successfully or not
     val onClose: ((Message) -> Unit) = {
       this.socket.logItems("Channel: leave $topic")
-      this.trigger(it)
+      this.trigger(Event.CLOSE, mapOf("reason" to "leave"))
     }
 
     // Push event to send to the server
@@ -311,6 +346,15 @@ class Channel(
     }
 
     return true
+  }
+
+  internal fun trigger(
+    event: Event,
+    payload: Payload = hashMapOf(),
+    ref: String = "",
+    joinRef: String? = null
+  ) {
+    this.trigger(event.value, payload, ref, joinRef)
   }
 
   internal fun trigger(
@@ -353,7 +397,7 @@ class Channel(
   }
 
   /** Rejoins the Channel e.g. after a disconnect */
-  private fun rejoin(timeout: Long = Defaults.TIMEOUT) {
+  private fun rejoin(timeout: Long = this.timeout) {
     this.sendJoin(timeout)
   }
 }

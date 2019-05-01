@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2019 Daniel Rees <daniel.rees18@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 package org.phoenixframework
 
 import com.google.gson.Gson
@@ -5,29 +27,7 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.net.URL
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-
-// Copyright (c) 2019 Daniel Rees <daniel.rees18@gmail.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
 
 /** Alias for a JSON mapping */
 typealias Payload = Map<String, Any>
@@ -104,52 +104,48 @@ class Socket(
    * Push that is sent through or created by a Socket instance. Different Socket instances will
    * create individual thread pools.
    */
-  internal val timerPool = ScheduledThreadPoolExecutor(8)
+//  internal var timerPool: ScheduledExecutorService = ScheduledThreadPoolExecutor(8)
+  internal var dispatchQueue: DispatchQueue = ScheduledDispatchQueue()
 
   //------------------------------------------------------------------------------
   // Private Attributes
+  // these are marked as `internal` so that they can be accessed during tests
   //------------------------------------------------------------------------------
   /** Returns the type of transport to use. Potentially expose for custom transports */
-  private val transport: (URL) -> Transport = { WebSocketTransport(it, client) }
+  internal var transport: (URL) -> Transport = { WebSocketTransport(it, client) }
 
   /** Collection of callbacks for socket state changes */
-  private val stateChangeCallbacks: StateChangeCallbacks = StateChangeCallbacks()
+  internal val stateChangeCallbacks: StateChangeCallbacks = StateChangeCallbacks()
 
   /** Collection of unclosed channels created by the Socket */
-  private var channels: MutableList<Channel> = ArrayList()
+  internal var channels: MutableList<Channel> = ArrayList()
 
   /** Buffers messages that need to be sent once the socket has connected */
-  private var sendBuffer: MutableList<() -> Unit> = ArrayList()
+  internal var sendBuffer: MutableList<() -> Unit> = ArrayList()
 
   /** Ref counter for messages */
-  private var ref: Int = 0
+  internal var ref: Int = 0
 
   /** Task to be triggered in the future to send a heartbeat message */
-  private var heartbeatTask: ScheduledFuture<*>? = null
+  internal var heartbeatTask: DispatchWorkItem? = null
 
   /** Ref counter for the last heartbeat that was sent */
-  private var pendingHeartbeatRef: String? = null
+  internal var pendingHeartbeatRef: String? = null
 
   /** Timer to use when attempting to reconnect */
-  private var reconnectTimer: TimeoutTimer
+  internal var reconnectTimer: TimeoutTimer
 
   //------------------------------------------------------------------------------
   // Connection Attributes
   //------------------------------------------------------------------------------
   /** The underlying WebSocket connection */
-  private var connection: Transport? = null
+  internal var connection: Transport? = null
 
   //------------------------------------------------------------------------------
   // Initialization
   //------------------------------------------------------------------------------
   init {
-    // Silently replace web socket URLs with HTTP URLs.
     var mutableUrl = url
-    if (url.regionMatches(0, "ws:", 0, 3, ignoreCase = true)) {
-      mutableUrl = "http:" + url.substring(3)
-    } else if (url.regionMatches(0, "wss:", 0, 4, ignoreCase = true)) {
-      mutableUrl = "https:" + url.substring(4)
-    }
 
     // Ensure that the URL ends with "/websocket"
     if (!mutableUrl.contains("/websocket")) {
@@ -160,6 +156,16 @@ class Socket(
 
       // append "websocket" to the path
       mutableUrl += "websocket"
+    }
+
+    // Store the endpoint before changing the protocol
+    this.endpoint = mutableUrl
+
+    // Silently replace web socket URLs with HTTP URLs.
+    if (url.regionMatches(0, "ws:", 0, 3, ignoreCase = true)) {
+      mutableUrl = "http:" + url.substring(3)
+    } else if (url.regionMatches(0, "wss:", 0, 4, ignoreCase = true)) {
+      mutableUrl = "https:" + url.substring(4)
     }
 
     // If there are query params, append them now
@@ -173,16 +179,16 @@ class Socket(
       httpUrl = httpBuilder.build()
     }
 
-    this.endpoint = mutableUrl
+    // Store the URL that will be used to establish a connection
     this.endpointUrl = httpUrl.url()
 
     // Create reconnect timer
     this.reconnectTimer = TimeoutTimer(
-        scheduledExecutorService = timerPool,
+        dispatchQueue = dispatchQueue,
         timerCalculation = reconnectAfterMs,
         callback = {
-          // log(socket attempting to reconnect)
-          // this.teardown() { this.connect() }
+          this.logItems("Socket attempting to reconnect")
+          this.teardown { this.connect() }
         })
   }
 
@@ -199,7 +205,7 @@ class Socket(
 
   /** @return True if the connection exists and is open */
   val isConnected: Boolean
-    get() = this.connection?.readyState == ReadyState.OPEN
+    get() = this.connection?.readyState == Transport.ReadyState.OPEN
 
   //------------------------------------------------------------------------------
   // Public
@@ -301,9 +307,7 @@ class Socket(
   }
 
   fun logItems(body: String) {
-    logger?.let {
-      it(body)
-    }
+    logger?.invoke(body)
   }
 
   //------------------------------------------------------------------------------
@@ -320,7 +324,7 @@ class Socket(
     this.connection = null
 
     // Heartbeats are no longer needed
-    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask?.cancel()
     this.heartbeatTask = null
 
     // Since the connections onClose was null'd out, inform all state callbacks
@@ -335,7 +339,7 @@ class Socket(
   }
 
   /** Send all messages that were buffered before the socket opened */
-  private fun flushSendBuffer() {
+  internal fun flushSendBuffer() {
     if (isConnected && sendBuffer.isNotEmpty()) {
       this.sendBuffer.forEach { it.invoke() }
       this.sendBuffer.clear()
@@ -345,20 +349,19 @@ class Socket(
   //------------------------------------------------------------------------------
   // Heartbeat
   //------------------------------------------------------------------------------
-  private fun resetHeartbeat() {
+  internal fun resetHeartbeat() {
     // Clear anything related to the previous heartbeat
     this.pendingHeartbeatRef = null
-    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask?.cancel()
     this.heartbeatTask = null
 
     // Do not start up the heartbeat timer if skipHeartbeat is true
     if (skipHeartbeat) return
-    heartbeatTask = timerPool.schedule({
-
-    }, heartbeatInterval, TimeUnit.MILLISECONDS)
+    heartbeatTask =
+        dispatchQueue.queue(heartbeatInterval, TimeUnit.MILLISECONDS) { sendHeartbeat() }
   }
 
-  private fun sendHeartbeat() {
+  internal fun sendHeartbeat() {
     // Do not send if the connection is closed
     if (!isConnected) return
 
@@ -387,7 +390,7 @@ class Socket(
   //------------------------------------------------------------------------------
   // Connection Transport Hooks
   //------------------------------------------------------------------------------
-  private fun onConnectionOpened() {
+  internal fun onConnectionOpened() {
     this.logItems("Transport: Connected to $endpoint")
 
     // Send any messages that were waiting for a connection
@@ -403,12 +406,12 @@ class Socket(
     this.stateChangeCallbacks.open.forEach { it.invoke() }
   }
 
-  private fun onConnectionClosed(code: Int) {
+  internal fun onConnectionClosed(code: Int) {
     this.logItems("Transport: close")
     this.triggerChannelError()
 
     // Prevent the heartbeat from triggering if the socket closed
-    this.heartbeatTask?.cancel(true)
+    this.heartbeatTask?.cancel()
     this.heartbeatTask = null
 
     // Inform callbacks the socket closed
@@ -421,7 +424,7 @@ class Socket(
     }
   }
 
-  private fun onConnectionMessage(rawMessage: String) {
+  internal fun onConnectionMessage(rawMessage: String) {
     this.logItems("Receive: $rawMessage")
 
     // Parse the message as JSON
@@ -439,7 +442,7 @@ class Socket(
     this.stateChangeCallbacks.message.forEach { it.invoke(message) }
   }
 
-  private fun onConnectionError(t: Throwable, response: Response?) {
+  internal fun onConnectionError(t: Throwable, response: Response?) {
     this.logItems("Transport: error $t")
 
     // Send an error to all channels

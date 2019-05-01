@@ -1,13 +1,35 @@
+/*
+ * Copyright (c) 2019 Daniel Rees <daniel.rees18@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 package org.phoenixframework
 
 //------------------------------------------------------------------------------
 // Type Aliases
 //------------------------------------------------------------------------------
 /** Meta details of a Presence. Just a dictionary of properties */
-typealias PresenceMeta = MutableMap<String, Any>
+typealias PresenceMeta = Map<String, Any>
 
 /** A mapping of a String to an array of Metas. e.g. {"metas": [{id: 1}]} */
-typealias PresenceMap = MutableMap<String, MutableList<PresenceMeta>>
+typealias PresenceMap = MutableMap<String, List<PresenceMeta>>
 
 /** A mapping of a Presence state to a mapping of Metas */
 typealias PresenceState = MutableMap<String, PresenceMap>
@@ -67,14 +89,14 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
   // Properties
   //------------------------------------------------------------------------------
   /** The channel the Presence belongs to */
-  private val channel: Channel
+  internal val channel: Channel
 
   /** Caller to callback hooks */
-  private val caller: Caller
+  internal val caller: Caller
 
   /** The state of the Presence */
   var state: PresenceState
-    private set
+    internal set
 
   /** Pending `join` and `leave` diffs that need to be synced */
   var pendingDiffs: MutableList<PresenceDiff>
@@ -96,7 +118,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
     this.pendingDiffs = mutableListOf()
     this.channel = channel
     this.joinRef = null
-    this.caller = Presence.Caller()
+    this.caller = Caller()
 
     val stateEvent = opts.events[Events.STATE]
     val diffEvent = opts.events[Events.DIFF]
@@ -112,7 +134,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
 
 
         this.pendingDiffs.forEach { diff ->
-          this.state = Presence.syncDiff(state, diff, caller.onJoin, caller.onLeave)
+          this.state = syncDiff(state, diff, caller.onJoin, caller.onLeave)
         }
 
         this.pendingDiffs.clear()
@@ -124,7 +146,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
         if (isPendingSyncState) {
           this.pendingDiffs.add(diff)
         } else {
-          this.state = Presence.syncDiff(state, diff, caller.onJoin, caller.onLeave)
+          this.state = syncDiff(state, diff, caller.onJoin, caller.onLeave)
           this.caller.onSync()
         }
       }
@@ -166,6 +188,19 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
   //------------------------------------------------------------------------------
   companion object {
 
+    private fun cloneMap(map: PresenceMap): PresenceMap {
+      val clone: PresenceMap = mutableMapOf()
+      map.forEach { entry -> clone[entry.key] = entry.value.toList() }
+      return clone
+    }
+
+    private fun cloneState(state: PresenceState): PresenceState {
+      val clone: PresenceState = mutableMapOf()
+      state.forEach { entry -> clone[entry.key] = cloneMap(entry.value) }
+      return clone
+    }
+
+
     /**
      * Used to sync the list of presences on the server with the client's state. An optional
      * `onJoin` and `onLeave` callback can be provided to react to changes in the client's local
@@ -178,20 +213,20 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       onJoin: OnJoin = { _, _, _ -> },
       onLeave: OnLeave = { _, _, _ -> }
     ): PresenceState {
-      val state = currentState
+      val state = cloneState(currentState)
       val leaves: PresenceState = mutableMapOf()
       val joins: PresenceState = mutableMapOf()
 
-      state.forEach { key, presence ->
+      state.forEach { (key, presence) ->
         if (!newState.containsKey(key)) {
           leaves[key] = presence
         }
       }
 
-      newState.forEach { key, newPresence ->
+      newState.forEach { (key, newPresence) ->
         state[key]?.let { currentPresence ->
-          val newRefs = newPresence["metas"]!!.map { meta -> meta["phx"] as String }
-          val curRefs = currentPresence["metas"]!!.map { meta -> meta["phx"] as String }
+          val newRefs = newPresence["metas"]!!.map { meta -> meta["phx_ref"] as String }
+          val curRefs = currentPresence["metas"]!!.map { meta -> meta["phx_ref"] as String }
 
           val joinedMetas = newPresence["metas"]!!.filter { meta ->
             curRefs.indexOf(meta["phx_ref"]) < 0
@@ -201,13 +236,13 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
           }
 
           if (joinedMetas.isNotEmpty()) {
-            joins[key] = newPresence
-            joins[key]!!["metas"] = joinedMetas.toMutableList()
+            joins[key] = cloneMap(newPresence)
+            joins[key]!!["metas"] = joinedMetas
           }
 
           if (leftMetas.isNotEmpty()) {
-            leaves[key] = currentPresence
-            leaves[key]!!["metas"] = leftMetas.toMutableList()
+            leaves[key] = cloneMap(currentPresence)
+            leaves[key]!!["metas"] = leftMetas
           }
         } ?: run {
           joins[key] = newPresence
@@ -215,7 +250,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       }
 
       val diff: PresenceDiff = mutableMapOf("joins" to joins, "leaves" to leaves)
-      return Presence.syncDiff(state, diff, onJoin, onLeave)
+      return syncDiff(state, diff, onJoin, onLeave)
 
     }
 
@@ -230,18 +265,23 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       onJoin: OnJoin = { _, _, _ -> },
       onLeave: OnLeave = { _, _, _ -> }
     ): PresenceState {
-      val state = currentState
+      val state = cloneState(currentState)
 
       // Sync the joined states and inform onJoin of new presence
       diff["joins"]?.forEach { key, newPresence ->
         val currentPresence = state[key]
-        state[key] = newPresence
+        state[key] = cloneMap(newPresence)
 
         currentPresence?.let { curPresence ->
           val joinedRefs = state[key]!!["metas"]!!.map { m -> m["phx_ref"] as String }
           val curMetas = curPresence["metas"]!!.filter { m -> joinedRefs.indexOf(m["phx_ref"]) < 0 }
 
-          state[key]!!["metas"]!!.addAll(0, curMetas)
+          // Data structures are immutable. Need to convert to a mutable copy,
+          // add the metas, and then reassign to the state
+          val mutableMetas = state[key]!!["metas"]!!.toMutableList()
+          mutableMetas.addAll(0, curMetas)
+
+          state[key]!!["metas"] = mutableMetas
         }
 
         onJoin.invoke(key, currentPresence, newPresence)
@@ -252,15 +292,11 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
         val curPresence = state[key] ?: return@forEach
 
         val refsToRemove = leftPresence["metas"]!!.map { it["phx_ref"] as String }
-        val keepMetas =
+        curPresence["metas"] =
             curPresence["metas"]!!.filter { m -> refsToRemove.indexOf(m["phx_ref"]) < 0 }
 
-        curPresence["metas"] = keepMetas.toMutableList()
         onLeave.invoke(key, curPresence, leftPresence)
-
-        if (keepMetas.isNotEmpty()) {
-          state[key]!!["metas"] = keepMetas.toMutableList()
-        } else {
+        if (curPresence["metas"]?.isEmpty() == true) {
           state.remove(key)
         }
       }

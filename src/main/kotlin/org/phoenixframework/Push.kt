@@ -1,6 +1,27 @@
+/*
+ * Copyright (c) 2019 Daniel Rees <daniel.rees18@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 package org.phoenixframework
 
-import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /**
@@ -21,7 +42,7 @@ class Push(
   var receivedMessage: Message? = null
 
   /** The task to be triggered if the Push times out */
-  var timeoutTask: ScheduledFuture<*>? = null
+  var timeoutTask: DispatchWorkItem? = null
 
   /** Hooks into a Push. Where .receive("ok", callback(Payload)) are stored */
   var receiveHooks: MutableMap<String, MutableList<((message: Message) -> Unit)>> = HashMap()
@@ -57,8 +78,7 @@ class Push(
 
     this.startTimeout()
     this.sent = true
-    // TODO: this.channel.socket.push
-    // TODO: weak reference?
+    this.channel.socket.push(channel.topic, event, payload, ref, channel.joinRef)
   }
 
   /**
@@ -133,11 +153,10 @@ class Push(
     }
 
     // Setup and start the Timer
-    this.timeoutTask = channel.socket.timerPool.schedule({
+    this.timeoutTask = channel.socket.dispatchQueue.queue(timeout, TimeUnit.MILLISECONDS) {
       this.trigger("timeout", hashMapOf())
-    }, timeout, TimeUnit.MILLISECONDS)
+    }
   }
-
 
   //------------------------------------------------------------------------------
   // Private
@@ -154,16 +173,14 @@ class Push(
 
   /** Removes receive hook from Channel regarding this Push */
   private fun cancelRefEvent() {
-    this.refEvent?.let { /* TODO: this.channel.off(it) */ }
+    this.refEvent?.let { this.channel.off(it) }
   }
 
   /** Cancels any ongoing timeout task */
   private fun cancelTimeout() {
-    this.timeoutTask?.cancel(true)
+    this.timeoutTask?.cancel()
     this.timeoutTask = null
   }
-
-
 
   /**
    * @param status Status to check if it has been received
