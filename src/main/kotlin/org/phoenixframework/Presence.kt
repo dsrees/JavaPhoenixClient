@@ -74,7 +74,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
 
   /** The state of the Presence */
   var state: PresenceState
-    private set
+    internal set
 
   /** Pending `join` and `leave` diffs that need to be synced */
   var pendingDiffs: MutableList<PresenceDiff>

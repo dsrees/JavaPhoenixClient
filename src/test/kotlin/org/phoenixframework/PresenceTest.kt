@@ -142,6 +142,27 @@ class PresenceTest {
     assertThat(onJoins[1].first).isEqualTo("u2")
     assertThat(onJoins[1].second).isNull()
     assertThat(onJoins[1].third["metas"]!![0]["id"]).isEqualTo(2)
+
+    // disconnect then reconnect
+    assertThat(presence.isPendingSyncState).isFalse()
+    channel.joinPush.ref = "2"
+    assertThat(presence.isPendingSyncState).isTrue()
+
+
+    channel.trigger("presence_diff",
+        mapOf("joins" to mapOf(), "leaves" to mapOf("u1" to user1)))
+    val d = presence.listBy(listByFirst)
+    assertThat(d).hasSize(1)
+    assertThat(d[0]["id"]).isEqualTo(1)
+    assertThat(d[0]["phx_ref"]).isEqualTo("1")
+
+    
+    channel.trigger("presence_state",
+        mapOf("u1" to user1, "u3" to user3))
+    val s2 = presence.listBy(listByFirst)
+    assertThat(s2).hasSize(1)
+    assertThat(s2[0]["id"]).isEqualTo(3)
+    assertThat(s2[0]["phx_ref"]).isEqualTo("3")
   }
 
   /* sync state */
@@ -298,7 +319,7 @@ class PresenceTest {
             mapOf("id" to 3, "phx_ref" to "3.new")
         )))
 
-    var state= mutableMapOf(
+    var state = mutableMapOf(
         "u3" to mutableMapOf("metas" to listOf(
             mapOf("id" to 3, "phx_ref" to "3"),
             mapOf("id" to 3, "phx_ref" to "3.left")
@@ -396,5 +417,33 @@ class PresenceTest {
     val expectedState = mutableMapOf(
         "u1" to mutableMapOf("metas" to listOf(mapOf("id" to 1, "phx_ref" to "1.2"))))
     assertThat(state).isEqualTo(expectedState)
+  }
+
+  /* listBy */
+  @Test
+  fun `listBy() lists full presence by default`() {
+    presence.state = fixState
+
+    val listExpectation = listOf(
+        mapOf("metas" to listOf(mapOf("id" to 1, "phx_ref" to "1"))),
+        mapOf("metas" to listOf(mapOf("id" to 2, "phx_ref" to "2"))),
+        mapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3")))
+    )
+
+    assertThat(presence.list()).isEqualTo(listExpectation)
+  }
+
+  @Test
+  fun `listBy() lists with custom function`() {
+    val state: PresenceState = mutableMapOf(
+        "u1" to mutableMapOf("metas" to listOf(
+            mapOf("id" to 1, "phx_ref" to "1.first"),
+            mapOf("id" to 1, "phx_ref" to "1.second"))
+        )
+    )
+
+    presence.state = state
+    val listBy = presence.listBy { it.value["metas"]!!.first() }
+    assertThat(listBy).isEqualTo(listOf(mapOf("id" to 1, "phx_ref" to "1.first")))
   }
 }
