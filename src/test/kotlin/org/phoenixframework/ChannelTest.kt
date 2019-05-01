@@ -452,16 +452,20 @@ class ChannelTest {
     setupJoinPushTests()
     val joinPush = channel.joinPush
 
-    val mockCallback = mock<(Message) -> Unit>()
+    val mockOk = mock<(Message) -> Unit>()
+    val mockError = mock<(Message) -> Unit>()
+    val mockTimeout = mock<(Message) -> Unit>()
     joinPush
-        .receive("ok", mockCallback)
-        .receive("error", mockCallback)
+        .receive("ok", mockOk)
+        .receive("error", mockError)
+        .receive("timeout", mockTimeout)
 
     receivesTimeout(joinPush)
+    joinPush.trigger("ok", emptyMap())
 
-    // TODO: THIS BREAKS THE TEST AND IT SHOULDN't
-//    receivesOk(joinPush)
-    verifyZeroInteractions(mockCallback)
+    verifyZeroInteractions(mockOk)
+    verifyZeroInteractions(mockError)
+    verify(mockTimeout).invoke(any())
   }
 
   @Test

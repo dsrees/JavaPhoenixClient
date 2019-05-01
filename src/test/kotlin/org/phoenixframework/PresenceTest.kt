@@ -156,7 +156,7 @@ class PresenceTest {
     assertThat(d[0]["id"]).isEqualTo(1)
     assertThat(d[0]["phx_ref"]).isEqualTo("1")
 
-    
+
     channel.trigger("presence_state",
         mapOf("u1" to user1, "u3" to user3))
     val s2 = presence.listBy(listByFirst)
