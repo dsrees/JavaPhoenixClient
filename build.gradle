@@ -29,6 +29,13 @@ dependencies {
   testCompile group: 'com.nhaarman.mockitokotlin2', name: 'mockito-kotlin', version: '2.1.0'
 }
 
+jacocoTestReport {
+  reports {
+    xml.enabled true
+    html.enabled false
+  }
+}
+
 compileKotlin {
   kotlinOptions.jvmTarget = "1.8"
 }

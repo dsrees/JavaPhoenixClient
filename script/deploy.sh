@@ -5,5 +5,5 @@ if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_TAG" != "" ]; then
 ./gradlew bintrayUpload --stacktrace
 else
   echo -e '#### Build for Test => Branch ['$TRAVIS_BRANCH'] Pull Request ['$TRAVIS_PULL_REQUEST'] ####'
-  ./gradlew build
-fi 
+  ./gradlew clean build jacocoTestReport
+fi
