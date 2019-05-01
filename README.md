@@ -15,7 +15,7 @@ fun connectToChatRoom() {
 
     // Create the Socket
     val params = hashMapOf("token" to "abc123")
-    val socket = PhxSocket("http://localhost:4000/socket/websocket", multipleParams)
+    val socket = Socket("http://localhost:4000/socket/websocket", params)
 
     // Listen to events on the Socket
     socket.logger = { Log.d("TAG", it) }
@@ -27,9 +27,9 @@ fun connectToChatRoom() {
 
     // Join channels and listen to events
     val chatroom = socket.channel("chatroom:general")
-    chatroom.on("new_message") {
-        // `it` is a PhxMessage object
-        val payload = it.payload
+    chatroom.on("new_message") { message ->
+        val payload = message.payload
+        ...
     }
 
     chatroom.join()
@@ -46,9 +46,9 @@ val client = OkHttpClient.Builder()
     .build()
 
 val params = hashMapOf("token" to "abc123")
-val socket = PhxSocket("http://localhost:4000/socket/websocket",
-                       multipleParams,
-                       client)
+val socket = Socket("http://localhost:4000/socket/websocket",
+                     params,
+                     client)
 ```
 
 
