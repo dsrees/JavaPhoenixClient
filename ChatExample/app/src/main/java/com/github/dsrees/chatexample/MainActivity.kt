@@ -18,10 +18,12 @@ class MainActivity : AppCompatActivity() {
   }
 
   private val messagesAdapter = MessagesAdapter()
-  private val socket = Socket("ws://localhost:4000/socket/websocket")
+  private val layoutManager = LinearLayoutManager(this)
+
+  private val socket = Socket("ws://10.0.2.2:4000/socket/websocket")
   private val topic = "rooms:lobby"
 
-  private lateinit var lobbyChannel: Channel
+  private var lobbyChannel: Channel? = null
 
   private val username: String
     get() = username_input.text.toString()
@@ -29,13 +31,11 @@ class MainActivity : AppCompatActivity() {
   private val message: String
     get() = message_input.text.toString()
 
-
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     setContentView(R.layout.activity_main)
 
 
-    val layoutManager = LinearLayoutManager(this)
     layoutManager.stackFromEnd = true
 
     messages_recycler_view.layoutManager = layoutManager
@@ -43,12 +43,12 @@ class MainActivity : AppCompatActivity() {
 
     socket.onOpen {
       this.addText("Socket Opened")
-      connect_button.text = "Disconnect"
+      runOnUiThread { connect_button.text = "Disconnect" }
     }
 
     socket.onClose {
       this.addText("Socket Closed")
-      connect_button.text = "Connect"
+      runOnUiThread { connect_button.text = "Connect" }
     }
 
     socket.onError { throwable, response ->
@@ -56,11 +56,16 @@ class MainActivity : AppCompatActivity() {
       this.addText("Socket Error")
     }
 
+    socket.logger = {
+      Log.e(TAG, "SOCKET $it")
+    }
+
 
     connect_button.setOnClickListener {
       if (socket.isConnected) {
         this.disconnectAndLeave()
       } else {
+        this.disconnectAndLeave()
         this.connectAndJoin()
       }
     }
@@ -68,28 +73,26 @@ class MainActivity : AppCompatActivity() {
     send_button.setOnClickListener { sendMessage() }
   }
 
-
   private fun sendMessage() {
     val payload = mapOf("user" to username, "body" to message)
 
     message_input.text.clear()
 
 
-    this.lobbyChannel.push("new:msg", payload)
-      .receive("ok") {
-        Log.d(TAG, "success $it")
+    this.lobbyChannel?.push("new:msg", payload)
+        ?.receive("ok") {
+          Log.d(TAG, "success $it")
 
-      }
-      .receive("error") {
-        Log.d(TAG, "error $it")
-      }
+        }
+        ?.receive("error") {
+          Log.d(TAG, "error $it")
+        }
 
   }
 
-
   private fun disconnectAndLeave() {
     // Be sure the leave the channel or call socket.remove(lobbyChannel)
-    lobbyChannel.leave()
+    lobbyChannel?.leave()
     socket.disconnect {
       this.addText("Socket Disconnected")
     }
@@ -104,7 +107,7 @@ class MainActivity : AppCompatActivity() {
     channel.on("new:msg") { message ->
       val payload = message.payload
       val username = payload["user"] as? String
-      val body = payload["body"] as? String
+      val body = payload["body"]
 
 
       if (username != null && body != null) {
@@ -117,21 +120,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     this.lobbyChannel = channel
-    this.lobbyChannel
-      .join()
-      .receive("ok") {
-        this.addText("Joined Channel")
-      }
-      .receive("error") {
-        this.addText("Failed to join channel: ${it.payload}")
-      }
+    channel
+        .join()
+        .receive("ok") {
+          this.addText("Joined Channel")
+        }
+        .receive("error") {
+          this.addText("Failed to join channel: ${it.payload}")
+        }
 
 
     this.socket.connect()
   }
 
   private fun addText(message: String) {
-    this.messagesAdapter.add(message)
+    runOnUiThread {
+      this.messagesAdapter.add(message)
+      layoutManager.smoothScrollToPosition(messages_recycler_view, null, messagesAdapter.itemCount)
+    }
+
   }
 
 }

@@ -17,7 +17,7 @@ class MessagesAdapter : RecyclerView.Adapter<MessagesAdapter.ViewHolder>() {
 
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(android.R.layout.simple_list_item_1, parent, false)
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_message, parent, false)
         return ViewHolder(view)
     }
 
@@ -28,7 +28,7 @@ class MessagesAdapter : RecyclerView.Adapter<MessagesAdapter.ViewHolder>() {
     }
 
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val label: TextView = itemView.findViewById(android.R.id.text1)
+        val label: TextView = itemView.findViewById(R.id.item_message_label)
     }
 
 }
