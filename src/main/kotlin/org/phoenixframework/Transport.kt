@@ -27,6 +27,9 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import java.io.EOFException
+import java.net.ConnectException
+import java.net.SocketException
 import java.net.URL
 
 /**
@@ -131,6 +134,16 @@ class WebSocketTransport(
   override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
     this.readyState = Transport.ReadyState.CLOSED
     this.onError?.invoke(t, response)
+
+    // Do not attempt to recover if the initial connection was refused
+    if (t is ConnectException) return
+
+    // Check if the socket was closed for some recoverable reason
+    if (t is SocketException) {
+      this.onClosed(webSocket, WS_CLOSE_SOCKET_EXCEPTION, "Socket Exception")
+    } else if (t is EOFException) {
+      this.onClosed(webSocket, WS_CLOSE_EOF_EXCEPTION, "EOF Exception")
+    }
   }
 
   override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
