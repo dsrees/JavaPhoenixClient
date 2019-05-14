@@ -51,6 +51,12 @@ internal data class StateChangeCallbacks(
 /** The code used when the socket was closed without error */
 const val WS_CLOSE_NORMAL = 1000
 
+/** The socket was closed due to a SocketException. Likely the client lost connectivity */
+const val WS_CLOSE_SOCKET_EXCEPTION = 4000
+
+/** The socket was closed due to an EOFException. Likely the server abruptly closed */
+const val WS_CLOSE_EOF_EXCEPTION = 4001
+
 /**
  * Connects to a Phoenix Server
  */
