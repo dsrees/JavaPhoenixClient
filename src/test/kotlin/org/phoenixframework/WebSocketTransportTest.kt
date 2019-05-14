@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.nhaarman.mockitokotlin2.any
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.verify
+import com.nhaarman.mockitokotlin2.verifyZeroInteractions
 import com.nhaarman.mockitokotlin2.whenever
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -12,13 +13,14 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
+import java.io.EOFException
+import java.net.SocketException
 import java.net.URL
 
 class WebSocketTransportTest {
 
   @Mock lateinit var mockClient: OkHttpClient
   @Mock lateinit var mockWebSocket: WebSocket
-  @Mock lateinit var mockChannel: Channel
   @Mock lateinit var mockResponse: Response
 
   lateinit var transport: WebSocketTransport
@@ -72,6 +74,8 @@ class WebSocketTransportTest {
   @Test
   fun `onFailure sets ready state to CLOSED and invokes onError callback`() {
     val mockClosure = mock<(Throwable, Response?) -> Unit>()
+    val mockOnClose = mock<(Int) -> Unit>()
+    transport.onClose = mockOnClose
     transport.onError = mockClosure
 
     transport.readyState = Transport.ReadyState.CONNECTING
@@ -80,6 +84,33 @@ class WebSocketTransportTest {
     transport.onFailure(mockWebSocket, throwable, mockResponse)
     assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSED)
     verify(mockClosure).invoke(throwable, mockResponse)
+    verifyZeroInteractions(mockOnClose)
+  }
+
+  @Test
+  fun `onFailure also triggers onClose for SocketException`() {
+    val mockOnError = mock<(Throwable, Response?) -> Unit>()
+    val mockOnClose = mock<(Int) -> Unit>()
+    transport.onClose = mockOnClose
+    transport.onError = mockOnError
+
+    val throwable = SocketException()
+    transport.onFailure(mockWebSocket, throwable, mockResponse)
+    verify(mockOnError).invoke(throwable, mockResponse)
+    verify(mockOnClose).invoke(4000)
+  }
+
+  @Test
+  fun `onFailure also triggers onClose for EOFException`() {
+    val mockOnError = mock<(Throwable, Response?) -> Unit>()
+    val mockOnClose = mock<(Int) -> Unit>()
+    transport.onClose = mockOnClose
+    transport.onError = mockOnError
+
+    val throwable = EOFException()
+    transport.onFailure(mockWebSocket, throwable, mockResponse)
+    verify(mockOnError).invoke(throwable, mockResponse)
+    verify(mockOnClose).invoke(4001)
   }
 
   @Test
