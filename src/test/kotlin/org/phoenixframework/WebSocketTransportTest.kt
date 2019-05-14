@@ -4,7 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import com.nhaarman.mockitokotlin2.any
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.verify
-import com.nhaarman.mockitokotlin2.verifyZeroInteractions
 import com.nhaarman.mockitokotlin2.whenever
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -74,8 +73,6 @@ class WebSocketTransportTest {
   @Test
   fun `onFailure sets ready state to CLOSED and invokes onError callback`() {
     val mockClosure = mock<(Throwable, Response?) -> Unit>()
-    val mockOnClose = mock<(Int) -> Unit>()
-    transport.onClose = mockOnClose
     transport.onError = mockClosure
 
     transport.readyState = Transport.ReadyState.CONNECTING
@@ -84,7 +81,6 @@ class WebSocketTransportTest {
     transport.onFailure(mockWebSocket, throwable, mockResponse)
     assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSED)
     verify(mockClosure).invoke(throwable, mockResponse)
-    verifyZeroInteractions(mockOnClose)
   }
 
   @Test

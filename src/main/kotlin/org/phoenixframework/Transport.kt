@@ -135,9 +135,6 @@ class WebSocketTransport(
     this.readyState = Transport.ReadyState.CLOSED
     this.onError?.invoke(t, response)
 
-    // Do not attempt to recover if the initial connection was refused
-    if (t is ConnectException) return
-
     // Check if the socket was closed for some recoverable reason
     if (t is SocketException) {
       this.onClosed(webSocket, WS_CLOSE_SOCKET_EXCEPTION, "Socket Exception")
