@@ -9,7 +9,7 @@ plugins {
 }
 
 group 'com.github.dsrees'
-version '0.2.3'
+version '0.2.4'
 
 sourceCompatibility = 1.8
 
