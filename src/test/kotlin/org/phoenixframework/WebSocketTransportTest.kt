@@ -15,6 +15,7 @@ import org.mockito.MockitoAnnotations
 import java.io.EOFException
 import java.net.SocketException
 import java.net.URL
+import javax.net.ssl.SSLException
 
 class WebSocketTransportTest {
 
@@ -97,6 +98,19 @@ class WebSocketTransportTest {
   }
 
   @Test
+  fun `onFailure also triggers onClose for SSLException`() {
+    val mockOnError = mock<(Throwable, Response?) -> Unit>()
+    val mockOnClose = mock<(Int) -> Unit>()
+    transport.onClose = mockOnClose
+    transport.onError = mockOnError
+
+    val throwable = SSLException("t")
+    transport.onFailure(mockWebSocket, throwable, mockResponse)
+    verify(mockOnError).invoke(throwable, mockResponse)
+    verify(mockOnClose).invoke(4001)
+  }
+
+  @Test
   fun `onFailure also triggers onClose for EOFException`() {
     val mockOnError = mock<(Throwable, Response?) -> Unit>()
     val mockOnClose = mock<(Int) -> Unit>()
@@ -106,7 +120,7 @@ class WebSocketTransportTest {
     val throwable = EOFException()
     transport.onFailure(mockWebSocket, throwable, mockResponse)
     verify(mockOnError).invoke(throwable, mockResponse)
-    verify(mockOnClose).invoke(4001)
+    verify(mockOnClose).invoke(4002)
   }
 
   @Test

@@ -28,9 +28,9 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import java.io.EOFException
-import java.net.ConnectException
 import java.net.SocketException
 import java.net.URL
+import javax.net.ssl.SSLException
 
 /**
  * Interface that defines different types of Transport layers. A default {@link WebSocketTransport}
@@ -137,9 +137,11 @@ class WebSocketTransport(
 
     // Check if the socket was closed for some recoverable reason
     if (t is SocketException) {
-      this.onClosed(webSocket, WS_CLOSE_SOCKET_EXCEPTION, "Socket Exception")
+      this.onClosed(webSocket, WS_CLOSE_SOCKET_EXCEPTION, "SocketException")
+    } else if (t is SSLException) {
+      this.onClosed(webSocket, WS_CLOSE_SSL_EXCEPTION, "SSLException")
     } else if (t is EOFException) {
-      this.onClosed(webSocket, WS_CLOSE_EOF_EXCEPTION, "EOF Exception")
+      this.onClosed(webSocket, WS_CLOSE_EOF_EXCEPTION, "EOFException")
     }
   }
 
