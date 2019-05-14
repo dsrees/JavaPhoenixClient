@@ -75,27 +75,17 @@ class MainActivity : AppCompatActivity() {
 
   private fun sendMessage() {
     val payload = mapOf("user" to username, "body" to message)
+    this.lobbyChannel?.push("new:msg", payload)
+        ?.receive("ok") { Log.d(TAG, "success $it") }
+        ?.receive("error") { Log.d(TAG, "error $it") }
 
     message_input.text.clear()
-
-
-    this.lobbyChannel?.push("new:msg", payload)
-        ?.receive("ok") {
-          Log.d(TAG, "success $it")
-
-        }
-        ?.receive("error") {
-          Log.d(TAG, "error $it")
-        }
-
   }
 
   private fun disconnectAndLeave() {
     // Be sure the leave the channel or call socket.remove(lobbyChannel)
     lobbyChannel?.leave()
-    socket.disconnect {
-      this.addText("Socket Disconnected")
-    }
+    socket.disconnect { this.addText("Socket Disconnected") }
   }
 
   private fun connectAndJoin() {

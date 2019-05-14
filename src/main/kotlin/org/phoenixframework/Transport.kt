@@ -134,8 +134,7 @@ class WebSocketTransport(
   override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
     this.readyState = Transport.ReadyState.CLOSED
     this.onError?.invoke(t, response)
-
-
+    
     // Check if the socket was closed for some recoverable reason
     if (t is SocketException) {
       this.onClosed(webSocket, WS_CLOSE_SOCKET_EXCEPTION, "Socket Exception")
