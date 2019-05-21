@@ -107,7 +107,7 @@ class WebSocketTransportTest {
     val throwable = SSLException("t")
     transport.onFailure(mockWebSocket, throwable, mockResponse)
     verify(mockOnError).invoke(throwable, mockResponse)
-    verify(mockOnClose).invoke(4001)
+    verify(mockOnClose).invoke(4000)
   }
 
   @Test
@@ -120,7 +120,7 @@ class WebSocketTransportTest {
     val throwable = EOFException()
     transport.onFailure(mockWebSocket, throwable, mockResponse)
     verify(mockOnError).invoke(throwable, mockResponse)
-    verify(mockOnClose).invoke(4002)
+    verify(mockOnClose).invoke(4000)
   }
 
   @Test

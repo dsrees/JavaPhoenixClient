@@ -24,7 +24,7 @@ class ManualDispatchQueue : DispatchQueue {
 
     // Filter all work items that are due to be fired and have not been
     // cancelled. Return early if there are no items to fire
-    val pastDueWorkItems = workItems.filter { it.deadline <= this.tickTime && !it.isCancelled }
+    val pastDueWorkItems = workItems.filter { it.isPastDue(tickTime) && !it.isCancelled }
 
     // if no items are due, then return early
     if (pastDueWorkItems.isEmpty()) return
@@ -33,9 +33,8 @@ class ManualDispatchQueue : DispatchQueue {
     pastDueWorkItems.forEach { it.perform() }
 
     // Remove all work items that are past due or canceled
-    workItems.removeAll { it.deadline <= this.tickTime || it.isCancelled }
+    workItems.removeAll { it.isPastDue(tickTime) || it.isCancelled }
   }
-
 
   override fun queue(delay: Long, unit: TimeUnit, runnable: () -> Unit): DispatchWorkItem {
     // Converts the given unit and delay to the unit used by this class
@@ -47,6 +46,23 @@ class ManualDispatchQueue : DispatchQueue {
 
     return workItem
   }
+
+  override fun queueAtFixedRate(
+    delay: Long,
+    period: Long,
+    unit: TimeUnit,
+    runnable: () -> Unit
+  ): DispatchWorkItem {
+
+    val delayInMs = tickTimeUnit.convert(delay, unit)
+    val periodInMs = tickTimeUnit.convert(period, unit)
+    val deadline = tickTime + delayInMs
+
+    val workItem = ManualDispatchWorkItem(runnable, deadline, periodInMs)
+    workItems.add(workItem)
+
+    return workItem
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -54,16 +70,32 @@ class ManualDispatchQueue : DispatchQueue {
 //------------------------------------------------------------------------------
 class ManualDispatchWorkItem(
   private val runnable: () -> Unit,
-  val deadline: Long
+  private var deadline: Long,
+  private val period: Long = 0
 ) : DispatchWorkItem {
 
-  override var isCancelled: Boolean = false
+  private var performCount = 0
 
-  override fun cancel() { this.isCancelled = true  }
+
+  // Test
+  fun isPastDue(tickTime: Long): Boolean {
+    return this.deadline <= tickTime
+  }
 
   fun perform() {
     if (isCancelled) return
     runnable.invoke()
+    performCount += 1
+
+    // If the task is repeatable, then schedule the next deadline after the given period
+    deadline += (performCount * period)
+  }
+
+  // DispatchWorkItem
+  override var isCancelled: Boolean = false
+
+  override fun cancel() {
+    this.isCancelled = true
   }
 }
 

@@ -503,7 +503,7 @@ class SocketTest {
 
     socket.onConnectionOpened()
     verify(mockTask).cancel()
-    verify(mockDispatchQueue).queue(any(), any(), any())
+    verify(mockDispatchQueue).queueAtFixedRate(any(), any(), any(), any())
   }
 
   @Test
@@ -541,7 +541,7 @@ class SocketTest {
   @Test
   fun `resetHeartbeat() creates a future heartbeat task`() {
     val mockTask = mock<DispatchWorkItem>()
-    whenever(mockDispatchQueue.queue(any(), any(), any())).thenReturn(mockTask)
+    whenever(mockDispatchQueue.queueAtFixedRate(any(), any(), any(), any())).thenReturn(mockTask)
 
     whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
     socket.connect()
@@ -552,7 +552,7 @@ class SocketTest {
 
     assertThat(socket.heartbeatTask).isNotNull()
     argumentCaptor<() -> Unit> {
-      verify(mockDispatchQueue).queue(eq(5_000L), eq(TimeUnit.MILLISECONDS), capture())
+      verify(mockDispatchQueue).queueAtFixedRate(eq(5_000L), eq(5_000L), eq(TimeUnit.MILLISECONDS), capture())
 
       // fire the task
       allValues.first().invoke()
