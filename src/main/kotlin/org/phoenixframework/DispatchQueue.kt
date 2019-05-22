@@ -36,6 +36,13 @@ import java.util.concurrent.TimeUnit
 interface DispatchQueue {
   /** Queue a Runnable to be executed after a given time unit delay */
   fun queue(delay: Long, unit: TimeUnit, runnable: () -> Unit): DispatchWorkItem
+
+  /**
+   * Creates and executes a periodic action that becomes enabled first after the given initial
+   * delay, and subsequently with the given period; that is, executions will commence after
+   * initialDelay, then initialDelay + period, then initialDelay + 2 * period, and so on.
+   */
+  fun queueAtFixedRate(delay: Long, period: Long, unit: TimeUnit, runnable: () -> Unit): DispatchWorkItem
 }
 
 /** Abstracts away a future task */
@@ -62,6 +69,16 @@ class ScheduledDispatchQueue(poolSize: Int = 8) : DispatchQueue {
 
   override fun queue(delay: Long, unit: TimeUnit, runnable: () -> Unit): DispatchWorkItem {
     val scheduledFuture = scheduledThreadPoolExecutor.schedule(runnable, delay, unit)
+    return ScheduledDispatchWorkItem(scheduledFuture)
+  }
+
+  override fun queueAtFixedRate(
+    delay: Long,
+    period: Long,
+    unit: TimeUnit,
+    runnable: () -> Unit
+  ): DispatchWorkItem {
+    val scheduledFuture = scheduledThreadPoolExecutor.scheduleAtFixedRate(runnable, delay, period, unit)
     return ScheduledDispatchWorkItem(scheduledFuture)
   }
 }
