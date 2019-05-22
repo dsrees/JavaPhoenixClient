@@ -27,9 +27,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import java.io.EOFException
-import java.net.ConnectException
-import java.net.SocketException
+import java.io.IOException
 import java.net.URL
 
 /**
@@ -136,10 +134,8 @@ class WebSocketTransport(
     this.onError?.invoke(t, response)
     
     // Check if the socket was closed for some recoverable reason
-    if (t is SocketException) {
-      this.onClosed(webSocket, WS_CLOSE_SOCKET_EXCEPTION, "Socket Exception")
-    } else if (t is EOFException) {
-      this.onClosed(webSocket, WS_CLOSE_EOF_EXCEPTION, "EOF Exception")
+    when (t) {
+      is IOException -> this.onClosed(webSocket, WS_CLOSE_SOCKET_EXCEPTION, "IOException")
     }
   }
 
