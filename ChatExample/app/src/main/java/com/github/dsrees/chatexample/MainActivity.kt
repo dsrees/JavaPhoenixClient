@@ -20,8 +20,14 @@ class MainActivity : AppCompatActivity() {
   private val messagesAdapter = MessagesAdapter()
   private val layoutManager = LinearLayoutManager(this)
 
-  private val socket = Socket("ws://10.0.2.2:4000/socket/websocket")
+
+  // Use when connecting to https://github.com/dwyl/phoenix-chat-example
+  private val socket = Socket("https://phxchat.herokuapp.com/socket/websocket")
   private val topic = "rooms:lobby"
+
+  // Use when connecting to local server
+//  private val socket = Socket("ws://10.0.2.2:4000/socket/websocket")
+//  private val topic = "room:lobby"
 
   private var lobbyChannel: Channel? = null
 
@@ -57,7 +63,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     socket.logger = {
-      Log.e(TAG, "SOCKET $it")
+      Log.d(TAG, "SOCKET $it")
     }
 
 

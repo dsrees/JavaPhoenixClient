@@ -28,15 +28,26 @@ android {
 }
 
 dependencies {
+    /*
+        To update the JavaPhoenixClient, either use the latest dependency from jcenter
+        OR run
+            `./gradlew jar`
+        and copy
+            `/build/lib/*.jar` to `/ChatExample/app/libs`
+        and comment out the jcenter dependency
+     */
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+//    implementation 'com.github.dsrees:JavaPhoenixClient:0.2.3'
+
+
+    compile "com.google.code.gson:gson:2.8.5"
+    compile "com.squareup.okhttp3:okhttp:3.12.2"
+
+
     implementation"org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 
     implementation 'androidx.appcompat:appcompat:1.0.2'
     implementation 'androidx.recyclerview:recyclerview:1.0.0'
     implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
-
-    implementation 'com.github.dsrees:JavaPhoenixClient:0.2.3'
-
-
 
 }
