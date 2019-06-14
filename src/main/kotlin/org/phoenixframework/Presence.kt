@@ -268,7 +268,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       val state = cloneState(currentState)
 
       // Sync the joined states and inform onJoin of new presence
-      diff["joins"]?.forEach { key, newPresence ->
+      diff["joins"]?.forEach { (key, newPresence) ->
         val currentPresence = state[key]
         state[key] = cloneMap(newPresence)
 
@@ -288,7 +288,7 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
       }
 
       // Sync the left diff and inform onLeave of left presence
-      diff["leaves"]?.forEach { key, leftPresence ->
+      diff["leaves"]?.forEach { (key, leftPresence) ->
         val curPresence = state[key] ?: return@forEach
 
         val refsToRemove = leftPresence["metas"]!!.map { it["phx_ref"] as String }
