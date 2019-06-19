@@ -8,14 +8,16 @@ import com.nhaarman.mockitokotlin2.whenever
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.WebSocket
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
-import java.io.EOFException
+import org.phoenixframework.Transport
+import org.phoenixframework.WebSocketTransport
 import java.net.SocketException
 import java.net.URL
-import javax.net.ssl.SSLException
 
 class WebSocketTransportTest {
 
@@ -23,132 +25,156 @@ class WebSocketTransportTest {
   @Mock lateinit var mockWebSocket: WebSocket
   @Mock lateinit var mockResponse: Response
 
-  lateinit var transport: WebSocketTransport
+  private lateinit var transport: WebSocketTransport
 
-  @Before
-  fun setUp() {
+  @BeforeEach
+  internal fun setUp() {
     MockitoAnnotations.initMocks(this)
 
     val url = URL("http://localhost:400/socket/websocket")
     transport = WebSocketTransport(url, mockClient)
   }
 
-  @Test
-  fun `connect sets ready state to CONNECTING and creates connection`() {
-    whenever(mockClient.newWebSocket(any(), any())).thenReturn(mockWebSocket)
+  @Nested
+  @DisplayName("connect")
+  inner class Connect {
+    @Test
+    internal fun `sets ready state to CONNECTING and creates connection`() {
+      whenever(mockClient.newWebSocket(any(), any())).thenReturn(mockWebSocket)
 
-    transport.connect()
-    assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CONNECTING)
-    assertThat(transport.connection).isNotNull()
+      transport.connect()
+      assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CONNECTING)
+      assertThat(transport.connection).isNotNull()
+    }
+
+    /* End Connect */
   }
 
-  @Test
-  fun `disconnect closes and releases the connection`() {
-    transport.connection = mockWebSocket
+  @Nested
+  @DisplayName("disconnect")
+  inner class Disconnect {
+    @Test
+    internal fun `closes and releases connection`() {
+      transport.connection = mockWebSocket
 
-    transport.disconnect(10, "Test reason")
-    verify(mockWebSocket).close(10, "Test reason")
-    assertThat(transport.connection).isNull()
+      transport.disconnect(10, "Test reason")
+      verify(mockWebSocket).close(10, "Test reason")
+      assertThat(transport.connection).isNull()
+    }
+
+    /* End Disconnect */
   }
 
-  @Test
-  fun `send sends text through the connection`() {
-    transport.connection = mockWebSocket
+  @Nested
+  @DisplayName("send")
+  inner class Send {
+    @Test
+    internal fun `sends text through the connection`() {
+      transport.connection = mockWebSocket
 
-    transport.send("some data")
-    verify(mockWebSocket).send("some data")
+      transport.send("some data")
+      verify(mockWebSocket).send("some data")
+    }
+
+    /* End Send */
   }
 
-  @Test
-  fun `onOpen sets ready state to OPEN and invokes the onOpen callback`() {
-    val mockClosure = mock<() -> Unit>()
-    transport.onOpen = mockClosure
+  @Nested
+  @DisplayName("onOpen")
+  inner class OnOpen {
+    @Test
+    internal fun `sets ready state to OPEN and invokes the onOpen callback`() {
+      val mockClosure = mock<() -> Unit>()
+      transport.onOpen = mockClosure
 
-    assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSED)
+      assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSED)
 
-    transport.onOpen(mockWebSocket, mockResponse)
-    assertThat(transport.readyState).isEqualTo(Transport.ReadyState.OPEN)
-    verify(mockClosure).invoke()
+      transport.onOpen(mockWebSocket, mockResponse)
+      assertThat(transport.readyState).isEqualTo(Transport.ReadyState.OPEN)
+      verify(mockClosure).invoke()
+    }
+
+    /* End OnOpen */
   }
 
-  @Test
-  fun `onFailure sets ready state to CLOSED and invokes onError callback`() {
-    val mockClosure = mock<(Throwable, Response?) -> Unit>()
-    transport.onError = mockClosure
 
-    transport.readyState = Transport.ReadyState.CONNECTING
+  @Nested
+  @DisplayName("onFailure")
+  inner class OnFailure {
+    @Test
+    internal fun `sets ready state to CLOSED and invokes onError callback`() {
+      val mockClosure = mock<(Throwable, Response?) -> Unit>()
+      transport.onError = mockClosure
 
-    val throwable = Throwable()
-    transport.onFailure(mockWebSocket, throwable, mockResponse)
-    assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSED)
-    verify(mockClosure).invoke(throwable, mockResponse)
+      transport.readyState = Transport.ReadyState.CONNECTING
+
+      val throwable = Throwable()
+      transport.onFailure(mockWebSocket, throwable, mockResponse)
+      assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSED)
+      verify(mockClosure).invoke(throwable, mockResponse)
+    }
+
+    @Test
+    internal fun `also triggers onClose`() {
+      val mockOnError = mock<(Throwable, Response?) -> Unit>()
+      val mockOnClose = mock<(Int) -> Unit>()
+      transport.onClose = mockOnClose
+      transport.onError = mockOnError
+
+      val throwable = SocketException()
+      transport.onFailure(mockWebSocket, throwable, mockResponse)
+      verify(mockOnError).invoke(throwable, mockResponse)
+      verify(mockOnClose).invoke(4000)
+    }
+
+    /* End OnFailure */
   }
 
-  @Test
-  fun `onFailure also triggers onClose for SocketException`() {
-    val mockOnError = mock<(Throwable, Response?) -> Unit>()
-    val mockOnClose = mock<(Int) -> Unit>()
-    transport.onClose = mockOnClose
-    transport.onError = mockOnError
+  @Nested
+  @DisplayName("onClosing")
+  inner class OnClosing {
+    @Test
+    internal fun `sets ready state to CLOSING`() {
+      transport.readyState = Transport.ReadyState.OPEN
 
-    val throwable = SocketException()
-    transport.onFailure(mockWebSocket, throwable, mockResponse)
-    verify(mockOnError).invoke(throwable, mockResponse)
-    verify(mockOnClose).invoke(4000)
+      transport.onClosing(mockWebSocket, 10, "reason")
+      assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSING)
+    }
+
+    /* End OnClosing */
   }
 
-  @Test
-  fun `onFailure also triggers onClose for SSLException`() {
-    val mockOnError = mock<(Throwable, Response?) -> Unit>()
-    val mockOnClose = mock<(Int) -> Unit>()
-    transport.onClose = mockOnClose
-    transport.onError = mockOnError
+  @Nested
+  @DisplayName("onMessage")
+  inner class OnMessage {
+    @Test
+    internal fun `invokes onMessage closure`() {
+      val mockClosure = mock<(String) -> Unit>()
+      transport.onMessage = mockClosure
 
-    val throwable = SSLException("t")
-    transport.onFailure(mockWebSocket, throwable, mockResponse)
-    verify(mockOnError).invoke(throwable, mockResponse)
-    verify(mockOnClose).invoke(4000)
+      transport.onMessage(mockWebSocket, "text")
+      verify(mockClosure).invoke("text")
+    }
+
+    /* End OnMessage*/
   }
 
-  @Test
-  fun `onFailure also triggers onClose for EOFException`() {
-    val mockOnError = mock<(Throwable, Response?) -> Unit>()
-    val mockOnClose = mock<(Int) -> Unit>()
-    transport.onClose = mockOnClose
-    transport.onError = mockOnError
 
-    val throwable = EOFException()
-    transport.onFailure(mockWebSocket, throwable, mockResponse)
-    verify(mockOnError).invoke(throwable, mockResponse)
-    verify(mockOnClose).invoke(4000)
-  }
+  @Nested
+  @DisplayName("onClosed")
+  inner class OnClosed {
+    @Test
+    internal fun `sets readyState to CLOSED and invokes closure`() {
+      val mockClosure = mock<(Int) -> Unit>()
+      transport.onClose = mockClosure
 
-  @Test
-  fun `onClosing sets ready state to CLOSING`() {
-    transport.readyState = Transport.ReadyState.OPEN
+      transport.readyState = Transport.ReadyState.CONNECTING
 
-    transport.onClosing(mockWebSocket, 10, "reason")
-    assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSING)
-  }
+      transport.onClosed(mockWebSocket, 10, "reason")
+      assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSED)
+      verify(mockClosure).invoke(10)
+    }
 
-  @Test
-  fun `onMessage invokes onMessage closure`() {
-    val mockClosure = mock<(String) -> Unit>()
-    transport.onMessage = mockClosure
-
-    transport.onMessage(mockWebSocket, "text")
-    verify(mockClosure).invoke("text")
-  }
-
-  @Test
-  fun `onClosed sets readyState to CLOSED and invokes closure`() {
-    val mockClosure = mock<(Int) -> Unit>()
-    transport.onClose = mockClosure
-
-    transport.readyState = Transport.ReadyState.CONNECTING
-
-    transport.onClosed(mockWebSocket, 10, "reason")
-    assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSED)
-    verify(mockClosure).invoke(10)
+    /* End OnClosed */
   }
 }

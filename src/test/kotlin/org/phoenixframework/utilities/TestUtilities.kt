@@ -1,5 +1,9 @@
-package org.phoenixframework
+package org.phoenixframework.utilities
 
+import org.phoenixframework.Binding
+import org.phoenixframework.Channel
+import org.phoenixframework.DispatchQueue
+import org.phoenixframework.DispatchWorkItem
 import java.util.concurrent.TimeUnit
 
 //------------------------------------------------------------------------------
@@ -58,7 +62,8 @@ class ManualDispatchQueue : DispatchQueue {
     val periodInMs = tickTimeUnit.convert(period, unit)
     val deadline = tickTime + delayInMs
 
-    val workItem = ManualDispatchWorkItem(runnable, deadline, periodInMs)
+    val workItem =
+        ManualDispatchWorkItem(runnable, deadline, periodInMs)
     workItems.add(workItem)
 
     return workItem
