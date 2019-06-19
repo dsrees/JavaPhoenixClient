@@ -58,27 +58,33 @@ class SocketTest {
       assertThat(socket.stateChangeCallbacks.error).isEmpty()
       assertThat(socket.stateChangeCallbacks.message).isEmpty()
       assertThat(socket.timeout).isEqualTo(Defaults.TIMEOUT)
-      assertThat(socket.heartbeatInterval).isEqualTo(Defaults.HEARTBEAT)
+      assertThat(socket.heartbeatIntervalMs).isEqualTo(Defaults.HEARTBEAT)
       assertThat(socket.logger).isNull()
-      assertThat(socket.reconnectAfterMs(1)).isEqualTo(1000)
-      assertThat(socket.reconnectAfterMs(2)).isEqualTo(2000)
-      assertThat(socket.reconnectAfterMs(3)).isEqualTo(5000)
-      assertThat(socket.reconnectAfterMs(4)).isEqualTo(10000)
-      assertThat(socket.reconnectAfterMs(5)).isEqualTo(10000)
+      assertThat(socket.reconnectAfterMs(1)).isEqualTo(10)
+      assertThat(socket.reconnectAfterMs(2)).isEqualTo(50)
+      assertThat(socket.reconnectAfterMs(3)).isEqualTo(100)
+      assertThat(socket.reconnectAfterMs(4)).isEqualTo(150)
+      assertThat(socket.reconnectAfterMs(5)).isEqualTo(200)
+      assertThat(socket.reconnectAfterMs(6)).isEqualTo(250)
+      assertThat(socket.reconnectAfterMs(7)).isEqualTo(500)
+      assertThat(socket.reconnectAfterMs(8)).isEqualTo(1_000)
+      assertThat(socket.reconnectAfterMs(9)).isEqualTo(2_000)
+      assertThat(socket.reconnectAfterMs(10)).isEqualTo(5_000)
+      assertThat(socket.reconnectAfterMs(11)).isEqualTo(5_000)
     }
 
     @Test
     internal fun `overrides some defaults`() {
       val socket = Socket("wss://localhost:4000/socket/", mapOf("one" to 2))
       socket.timeout = 40_000
-      socket.heartbeatInterval = 60_000
+      socket.heartbeatIntervalMs = 60_000
       socket.logger = { }
       socket.reconnectAfterMs = { 10 }
 
       assertThat(socket.params).isEqualTo(mapOf("one" to 2))
       assertThat(socket.endpoint).isEqualTo("wss://localhost:4000/socket/websocket")
       assertThat(socket.timeout).isEqualTo(40_000)
-      assertThat(socket.heartbeatInterval).isEqualTo(60_000)
+      assertThat(socket.heartbeatIntervalMs).isEqualTo(60_000)
       assertThat(socket.logger).isNotNull()
       assertThat(socket.reconnectAfterMs(1)).isEqualTo(10)
       assertThat(socket.reconnectAfterMs(2)).isEqualTo(10)
@@ -447,25 +453,26 @@ class SocketTest {
   @Nested
   @DisplayName("sendHeartbeat")
   inner class SendHeartbeat {
-    @Test
-    internal fun `closes socket when heartbeat is not ack'd within heartbeat window`() {
+
+    @BeforeEach
+    internal fun setUp() {
       whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
       socket.connect()
+    }
 
+    @Test
+    internal fun `closes socket when heartbeat is not ack'd within heartbeat window`() {
       socket.sendHeartbeat()
       verify(connection, never()).disconnect(any(), any())
       assertThat(socket.pendingHeartbeatRef).isNotNull()
 
       socket.sendHeartbeat()
-      verify(connection).disconnect(WS_CLOSE_NORMAL, "Heartbeat timed out")
+      verify(connection).disconnect(WS_CLOSE_NORMAL, "heartbeat timeout")
       assertThat(socket.pendingHeartbeatRef).isNull()
     }
 
     @Test
     internal fun `pushes heartbeat data when connected`() {
-      whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
-      socket.connect()
-
       socket.sendHeartbeat()
 
       val expected = "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
@@ -476,7 +483,6 @@ class SocketTest {
     @Test
     internal fun `does nothing when not connected`() {
       whenever(connection.readyState).thenReturn(Transport.ReadyState.CLOSED)
-      socket.connect()
       socket.sendHeartbeat()
 
       verify(connection, never()).disconnect(any(), any())
@@ -530,13 +536,65 @@ class SocketTest {
   }
 
   @Nested
-  @DisplayName("onConnectionOpened")
-  inner class OnConnectionOpened {
+  @DisplayName("resetHeartbeat")
+  inner class ResetHeartbeat {
     @Test
-    internal fun `flushes the send buffer`() {
+    internal fun `clears any pending heartbeat`() {
+      socket.pendingHeartbeatRef = "1"
+      socket.resetHeartbeat()
+
+      assertThat(socket.pendingHeartbeatRef).isNull()
+    }
+
+    @Test
+    fun `does not schedule heartbeat if skipHeartbeat == true`() {
+      socket.skipHeartbeat = true
+      socket.resetHeartbeat()
+
+      verifyZeroInteractions(mockDispatchQueue)
+    }
+
+    @Test
+    internal fun `creates a future heartbeat task`() {
+      val mockTask = mock<DispatchWorkItem>()
+      whenever(mockDispatchQueue.queueAtFixedRate(any(), any(), any(), any())).thenReturn(mockTask)
+
       whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
       socket.connect()
+      socket.heartbeatIntervalMs = 5_000
 
+      assertThat(socket.heartbeatTask).isNull()
+      socket.resetHeartbeat()
+
+      assertThat(socket.heartbeatTask).isNotNull()
+      argumentCaptor<() -> Unit> {
+        verify(mockDispatchQueue).queueAtFixedRate(eq(5_000L), eq(5_000L),
+            eq(TimeUnit.MILLISECONDS), capture())
+
+        // fire the task
+        allValues.first().invoke()
+
+        val expected =
+            "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
+        verify(connection).send(expected)
+      }
+    }
+
+    /* End ResetHeartbeat */
+  }
+
+  @Nested
+  @DisplayName("onConnectionOpened")
+  inner class OnConnectionOpened {
+
+    @BeforeEach
+    internal fun setUp() {
+      whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
+      socket.connect()
+    }
+
+    @Test
+    internal fun `flushes the send buffer`() {
       var oneCalled = 0
       socket.sendBuffer.add { oneCalled += 1 }
 
@@ -583,69 +641,42 @@ class SocketTest {
   }
 
   @Nested
-  @DisplayName("resetHeartbeat")
-  inner class ResetHeartbeat {
-    @Test
-    internal fun `clears any pending heartbeat`() {
-      socket.pendingHeartbeatRef = "1"
-      socket.resetHeartbeat()
+  @DisplayName("onConnectionClosed")
+  inner class OnConnectionClosed {
 
-      assertThat(socket.pendingHeartbeatRef).isNull()
-    }
+    private lateinit var mockTimer: TimeoutTimer
 
-    @Test
-    fun `does not schedule heartbeat if skipHeartbeat == true`() {
-      socket.skipHeartbeat = true
-      socket.resetHeartbeat()
-
-      verifyZeroInteractions(mockDispatchQueue)
-    }
-
-    @Test
-    internal fun `creates a future heartbeat task`() {
-      val mockTask = mock<DispatchWorkItem>()
-      whenever(mockDispatchQueue.queueAtFixedRate(any(), any(), any(), any())).thenReturn(mockTask)
+    @BeforeEach
+    internal fun setUp() {
+      mockTimer = mock()
+      socket.reconnectTimer = mockTimer
 
       whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
       socket.connect()
-      socket.heartbeatInterval = 5_000
-
-      assertThat(socket.heartbeatTask).isNull()
-      socket.resetHeartbeat()
-
-      assertThat(socket.heartbeatTask).isNotNull()
-      argumentCaptor<() -> Unit> {
-        verify(mockDispatchQueue).queueAtFixedRate(eq(5_000L), eq(5_000L),
-            eq(TimeUnit.MILLISECONDS), capture())
-
-        // fire the task
-        allValues.first().invoke()
-
-        val expected =
-            "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
-        verify(connection).send(expected)
-      }
     }
 
-    /* End ResetHeartbeat */
-  }
-
-  @Nested
-  @DisplayName("onConnectionClosed")
-  inner class OnConnectionClosed {
     @Test
-    internal fun `it does not schedule reconnectTimer timeout if normal close`() {
-      val mockTimer = mock<TimeoutTimer>()
-      socket.reconnectTimer = mockTimer
-
+    internal fun `schedules reconnectTimer timeout if normal close`() {
       socket.onConnectionClosed(WS_CLOSE_NORMAL)
+      verify(mockTimer).scheduleTimeout()
+    }
+
+    @Test
+    internal fun `does not schedule reconnectTimer timeout if normal close after explicit disconnect`() {
+      socket.disconnect()
       verify(mockTimer, never()).scheduleTimeout()
     }
 
     @Test
     internal fun `schedules reconnectTimer if not normal close`() {
-      val mockTimer = mock<TimeoutTimer>()
-      socket.reconnectTimer = mockTimer
+      socket.onConnectionClosed(1001)
+      verify(mockTimer).scheduleTimeout()
+    }
+
+    @Test
+    internal fun `schedules reconnectTimer timeout if connection cannot be made after a previous clean disconnect`() {
+      socket.disconnect()
+      socket.connect()
 
       socket.onConnectionClosed(1001)
       verify(mockTimer).scheduleTimeout()
@@ -677,12 +708,54 @@ class SocketTest {
     }
 
     @Test
-    internal fun `triggers channel error`() {
-      val channel = mock<Channel>()
-      socket.channels.add(channel)
+    internal fun `triggers channel error if joining`() {
+      val channel = socket.channel("topic")
+      val spy = spy(channel)
+
+      // Use the spy instance instead of the Channel instance
+      socket.channels.remove(channel)
+      socket.channels.add(spy)
+
+      spy.join()
+      assertThat(spy.state).isEqualTo(Channel.State.JOINING)
 
       socket.onConnectionClosed(1001)
-      verify(channel).trigger("phx_error")
+      verify(spy).trigger("phx_error")
+    }
+
+    @Test
+    internal fun `triggers channel error if joined`() {
+      val channel = socket.channel("topic")
+      val spy = spy(channel)
+
+      // Use the spy instance instead of the Channel instance
+      socket.channels.remove(channel)
+      socket.channels.add(spy)
+
+      spy.join().trigger("ok", emptyMap())
+
+      assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+
+      socket.onConnectionClosed(1001)
+      verify(spy).trigger("phx_error")
+    }
+
+    @Test
+    internal fun `does not trigger channel error after leave`() {
+      val channel = socket.channel("topic")
+      val spy = spy(channel)
+
+      // Use the spy instance instead of the Channel instance
+      socket.channels.remove(channel)
+      socket.channels.add(spy)
+
+      spy.join().trigger("ok", emptyMap())
+      spy.leave()
+
+      assertThat(channel.state).isEqualTo(Channel.State.CLOSED)
+
+      socket.onConnectionClosed(1001)
+      verify(spy, never()).trigger("phx_error")
     }
 
     /* End OnConnectionClosed */
@@ -707,12 +780,54 @@ class SocketTest {
     }
 
     @Test
-    internal fun `triggers channel error`() {
-      val channel = mock<Channel>()
-      socket.channels.add(channel)
+    internal fun `triggers channel error if joining`() {
+      val channel = socket.channel("topic")
+      val spy = spy(channel)
+
+      // Use the spy instance instead of the Channel instance
+      socket.channels.remove(channel)
+      socket.channels.add(spy)
+
+      spy.join()
+      assertThat(spy.state).isEqualTo(Channel.State.JOINING)
 
       socket.onConnectionError(Throwable(), null)
-      verify(channel).trigger("phx_error")
+      verify(spy).trigger("phx_error")
+    }
+
+    @Test
+    internal fun `triggers channel error if joined`() {
+      val channel = socket.channel("topic")
+      val spy = spy(channel)
+
+      // Use the spy instance instead of the Channel instance
+      socket.channels.remove(channel)
+      socket.channels.add(spy)
+
+      spy.join().trigger("ok", emptyMap())
+
+      assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+
+      socket.onConnectionError(Throwable(), null)
+      verify(spy).trigger("phx_error")
+    }
+
+    @Test
+    internal fun `does not trigger channel error after leave`() {
+      val channel = socket.channel("topic")
+      val spy = spy(channel)
+
+      // Use the spy instance instead of the Channel instance
+      socket.channels.remove(channel)
+      socket.channels.add(spy)
+
+      spy.join().trigger("ok", emptyMap())
+      spy.leave()
+
+      assertThat(channel.state).isEqualTo(Channel.State.CLOSED)
+
+      socket.onConnectionError(Throwable(), null)
+      verify(spy, never()).trigger("phx_error")
     }
 
     /* End OnConnectionError */

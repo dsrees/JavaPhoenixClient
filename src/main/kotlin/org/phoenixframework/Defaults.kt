@@ -40,12 +40,12 @@ object Defaults {
   }
 
   /** Default reconnect algorithm for the socket */
-  val reconnectAfterMs: (Int) -> Long = { tries ->
+  val reconnectSteppedBackOff: (Int) -> Long = { tries ->
     if (tries > 9) 5_000 else listOf(10L, 50L, 100L, 150L, 200L, 250L, 500L, 1_000L, 2_000L)[tries - 1]
   }
 
   /** Default rejoin algorithm for individual channels */
-  val rejoinAfterMs: (Int) -> Long = { tries ->
+  val rejoinSteppedBackOff: (Int) -> Long = { tries ->
     if (tries > 3) 10_000 else listOf(1_000L, 2_000L, 5_000L)[tries - 1]
   }
 
