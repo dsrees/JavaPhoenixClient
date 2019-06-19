@@ -51,6 +51,8 @@ internal data class StateChangeCallbacks(
 /** The code used when the socket was closed without error */
 const val WS_CLOSE_NORMAL = 1000
 
+
+
 /** The socket was closed due to a SocketException. Likely the client lost connectivity */
 const val WS_CLOSE_SOCKET_EXCEPTION = 4000
 
@@ -138,6 +140,9 @@ class Socket(
 
   /** Timer to use when attempting to reconnect */
   internal var reconnectTimer: TimeoutTimer
+
+  /** True if the socket closed cleanly. False if it was closed due to an error or timeout */
+  internal var closeWasClean: Boolean = false
 
   //------------------------------------------------------------------------------
   // Connection Attributes

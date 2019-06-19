@@ -36,8 +36,19 @@ object Defaults {
 
   /** Default reconnect algorithm. Reconnects after 1s, 2s, 5s and then 10s thereafter */
   val steppedBackOff: (Int) -> Long = { tries ->
-    if (tries > 3) 10000 else listOf(1000L, 2000L, 5000L)[tries - 1]
+    if (tries > 3) 10_000 else listOf(1_000L, 2_000L, 5_000L)[tries - 1]
   }
+
+  /** Default reconnect algorithm for the socket */
+  val reconnectAfterMs: (Int) -> Long = { tries ->
+    if (tries > 9) 5_000 else listOf(10L, 50L, 100L, 150L, 200L, 250L, 500L, 1_000L, 2_000L)[tries - 1]
+  }
+
+  /** Default rejoin algorithm for individual channels */
+  val rejoinAfterMs: (Int) -> Long = { tries ->
+    if (tries > 3) 10_000 else listOf(1_000L, 2_000L, 5_000L)[tries - 1]
+  }
+
 
   /** The default Gson configuration to use when parsing messages */
   val gson: Gson
