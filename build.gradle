@@ -18,7 +18,15 @@ repositories {
 }
 
 test {
+  // JUnit 5 Support
   useJUnitPlatform()
+
+  // This allows us see tests execution progress in the output on the CI.
+  testLogging {
+    events 'passed', 'skipped', 'failed', 'standardOut', 'standardError'
+    exceptionFormat 'full'
+  }
+
 }
 
 dependencies {
@@ -33,6 +41,15 @@ dependencies {
   testCompile group: 'org.mockito', name: 'mockito-core', version: '2.27.0'
   testCompile group: 'com.nhaarman.mockitokotlin2', name: 'mockito-kotlin', version: '2.1.0'
 }
+
+jacocoTestReport {
+  reports {
+    xml.enabled true
+    html.enabled false
+  }
+}
+
+
 
 compileKotlin {
   kotlinOptions.jvmTarget = "1.8"
