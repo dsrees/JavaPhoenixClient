@@ -1,7 +1,8 @@
 # JavaPhoenixClient
 
-[ ![Download](https://api.bintray.com/packages/drees/java-phoenix-client/JavaPhoenixClient/images/download.svg) ](https://bintray.com/drees/java-phoenix-client/JavaPhoenixClient/_latestVersion)
+[![Download](https://api.bintray.com/packages/drees/java-phoenix-client/JavaPhoenixClient/images/download.svg) ](https://bintray.com/drees/java-phoenix-client/JavaPhoenixClient/_latestVersion)
 [![Build Status](https://travis-ci.com/dsrees/JavaPhoenixClient.svg?branch=master)](https://travis-ci.com/dsrees/JavaPhoenixClient)
+[![codecov](https://codecov.io/gh/dsrees/JavaPhoenixClient/branch/master/graph/badge.svg)](https://codecov.io/gh/dsrees/JavaPhoenixClient)
 
 
 JavaPhoenixClient is a Kotlin implementation of the [phoenix.js](https://hexdocs.pm/phoenix/js/) client used to manage Phoenix channels.
