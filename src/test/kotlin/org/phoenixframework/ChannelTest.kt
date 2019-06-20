@@ -5,22 +5,26 @@ import com.nhaarman.mockitokotlin2.any
 import com.nhaarman.mockitokotlin2.eq
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.never
+import com.nhaarman.mockitokotlin2.spy
 import com.nhaarman.mockitokotlin2.times
 import com.nhaarman.mockitokotlin2.verify
-import com.nhaarman.mockitokotlin2.verifyZeroInteractions
 import com.nhaarman.mockitokotlin2.whenever
+import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
+import org.mockito.Mockito.verifyZeroInteractions
 import org.mockito.MockitoAnnotations
-import org.mockito.stubbing.Answer
 import org.phoenixframework.queue.ManualDispatchQueue
 import org.phoenixframework.utilities.getBindings
 
 class ChannelTest {
+
+
+  @Mock lateinit var okHttpClient: OkHttpClient
 
   @Mock lateinit var socket: Socket
   @Mock lateinit var mockCallback: ((Message) -> Unit)
@@ -29,28 +33,21 @@ class ChannelTest {
   private val kDefaultTimeout = 10_000L
   private val kDefaultPayload: Payload = mapOf("one" to "two")
   private val kEmptyPayload: Payload = mapOf()
-  private val reconnectAfterMs: (Int) -> Long = Defaults.steppedBackOff
 
   lateinit var fakeClock: ManualDispatchQueue
   lateinit var channel: Channel
-
-  var mutableRef = 0
-  var mutableRefAnswer: Answer<String> = Answer {
-    mutableRef += 1
-    mutableRef.toString()
-  }
 
   @BeforeEach
   internal fun setUp() {
     MockitoAnnotations.initMocks(this)
 
-    mutableRef = 0
     fakeClock = ManualDispatchQueue()
 
     whenever(socket.dispatchQueue).thenReturn(fakeClock)
     whenever(socket.makeRef()).thenReturn(kDefaultRef)
     whenever(socket.timeout).thenReturn(kDefaultTimeout)
-    whenever(socket.reconnectAfterMs).thenReturn(reconnectAfterMs)
+    whenever(socket.reconnectAfterMs).thenReturn(Defaults.reconnectSteppedBackOff)
+    whenever(socket.rejoinAfterMs).thenReturn(Defaults.rejoinSteppedBackOff)
 
     channel = Channel("topic", kDefaultPayload, socket)
   }
@@ -155,6 +152,14 @@ class ChannelTest {
   @Nested
   @DisplayName("join")
   inner class Join {
+
+    @BeforeEach
+    internal fun setUp() {
+      socket = spy(Socket(url ="https://localhost:4000/socket", client = okHttpClient))
+      socket.dispatchQueue = fakeClock
+      channel = Channel("topic", kDefaultPayload, socket)
+    }
+
     @Test
     internal fun `sets state to joining`() {
       channel.join()
@@ -201,143 +206,151 @@ class ChannelTest {
       assertThat(joinPush.timeout).isEqualTo(newTimeout)
     }
 
-    /* End Join */
-  }
+    @Nested
+    @DisplayName("timeout behavior")
+    inner class TimeoutBehavior {
 
-  @Nested
-  @DisplayName("timeout behavior")
-  inner class TimeoutBehavior {
-    @Test
-    internal fun `succeeds before timeout`() {
-      val joinPush = channel.joinPush
-      val timeout = channel.timeout
+      private lateinit var joinPush: Push
 
-      channel.join()
-      verify(socket).push(any(), any(), any(), any(), any())
-
-      fakeClock.tick(timeout / 2)
-
-      joinPush.trigger("ok", kEmptyPayload)
-      assertThat(channel.state).isEqualTo(Channel.State.JOINED)
-
-      fakeClock.tick(timeout)
-      verify(socket, times(1)).push(any(), any(), any(), any(), any())
-    }
-
-    @Test
-    internal fun `retries with backoff after timeout`() {
-      var ref = 0
-      whenever(socket.isConnected).thenReturn(true)
-      whenever(socket.makeRef()).thenAnswer {
-        ref += 1
-        ref.toString()
+      private fun receiveSocketOpen() {
+        whenever(socket.isConnected).thenReturn(true)
+        socket.onConnectionOpened()
       }
 
-      val joinPush = channel.joinPush
-      val timeout = channel.timeout
+      @BeforeEach
+      internal fun setUp() {
+        joinPush = channel.joinPush
+      }
 
-      channel.join()
-      verify(socket, times(1)).push(any(), any(), any(), any(), any())
+      @Test
+      internal fun `succeeds before timeout`() {
+        val timeout = channel.timeout
 
-      fakeClock.tick(timeout) // leave push sent to the server
-      verify(socket, times(2)).push(any(), any(), any(), any(), any())
+        socket.connect()
+        this.receiveSocketOpen()
 
-      fakeClock.tick(1_000) // begin stepped backoff
-      verify(socket, times(3)).push(any(), any(), any(), any(), any())
+        channel.join()
+        verify(socket).push(any(), any(), any(), any(), any())
+        assertThat(channel.timeout).isEqualTo(10_000)
 
-      fakeClock.tick(2_000)
-      verify(socket, times(4)).push(any(), any(), any(), any(), any())
+        fakeClock.tick(100)
 
-      fakeClock.tick(5_000)
-      verify(socket, times(5)).push(any(), any(), any(), any(), any())
+        joinPush.trigger("ok", kEmptyPayload)
+        assertThat(channel.state).isEqualTo(Channel.State.JOINED)
 
-      fakeClock.tick(10_000)
-      verify(socket, times(6)).push(any(), any(), any(), any(), any())
+        fakeClock.tick(timeout)
+        verify(socket, times(1)).push(any(), any(), any(), any(), any())
+      }
 
-      joinPush.trigger("ok", kEmptyPayload)
-      assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+      @Test
+      internal fun `retries with backoff after timeout`() {
+        val timeout = channel.timeout
 
-      fakeClock.tick(10_000)
-      verify(socket, times(6)).push(any(), any(), any(), any(), any())
-      assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+        socket.connect()
+        this.receiveSocketOpen()
+
+        channel.join().receive("timeout", mockCallback)
+
+        verify(socket, times(1)).push(any(), eq("phx_join"), any(), any(), any())
+        verify(mockCallback, never()).invoke(any())
+
+        fakeClock.tick(timeout) // leave pushed to server
+        verify(socket, times(1)).push(any(), eq("phx_leave"), any(), any(), any())
+        verify(mockCallback, times(1)).invoke(any())
+
+        fakeClock.tick(timeout + 1000) // rejoin
+        verify(socket, times(2)).push(any(), eq("phx_join"), any(), any(), any())
+        verify(socket, times(2)).push(any(), eq("phx_leave"), any(), any(), any())
+        verify(mockCallback, times(2)).invoke(any())
+
+        fakeClock.tick(10_000)
+        joinPush.trigger("ok", kEmptyPayload)
+        verify(socket, times(3)).push(any(), eq("phx_join"), any(), any(), any())
+        assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+      }
+
+      @Test
+      internal fun `with socket and join delay`() {
+        val joinPush = channel.joinPush
+
+        channel.join()
+        verify(socket, times(1)).push(any(), any(), any(), any(), any())
+
+        // Open the socket after a delay
+        fakeClock.tick(9_000)
+        verify(socket, times(1)).push(any(), any(), any(), any(), any())
+
+        // join request returns between timeouts
+        fakeClock.tick(1_000)
+        socket.connect()
+
+        assertThat(channel.state).isEqualTo(Channel.State.ERRORED)
+        this.receiveSocketOpen()
+        joinPush.trigger("ok", kEmptyPayload)
+
+        fakeClock.tick(1_000)
+        assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+
+        verify(socket, times(3)).push(any(), any(), any(), any(), any())
+      }
+
+      @Test
+      internal fun `with socket delay only`() {
+        val joinPush = channel.joinPush
+
+        channel.join()
+        assertThat(channel.state).isEqualTo(Channel.State.JOINING)
+
+        // connect socket after a delay
+        fakeClock.tick(6_000)
+        socket.connect()
+
+        // open socket after delay
+        fakeClock.tick(5_000)
+        this.receiveSocketOpen()
+        joinPush.trigger("ok", kEmptyPayload)
+
+        joinPush.trigger("ok", kEmptyPayload)
+        assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+      }
+
+      /* End TimeoutBehavior */
     }
 
-    @Test
-    internal fun `with socket and join delay`() {
-      whenever(socket.isConnected).thenReturn(false)
-      val joinPush = channel.joinPush
-
-      channel.join()
-      verify(socket, times(1)).push(any(), any(), any(), any(), any())
-
-      // Open the socket after a delay
-      fakeClock.tick(9_000)
-      verify(socket, times(1)).push(any(), any(), any(), any(), any())
-
-      // join request returns between timeouts
-      fakeClock.tick(1_000)
-
-      whenever(socket.isConnected).thenReturn(true)
-      joinPush.trigger("ok", kEmptyPayload)
-
-      assertThat(channel.state).isEqualTo(Channel.State.ERRORED)
-
-      fakeClock.tick(1_000)
-      assertThat(channel.state).isEqualTo(Channel.State.JOINING)
-
-      joinPush.trigger("ok", kEmptyPayload)
-      assertThat(channel.state).isEqualTo(Channel.State.JOINED)
-
-      verify(socket, times(3)).push(any(), any(), any(), any(), any())
-    }
-
-    @Test
-    internal fun `with socket delay only`() {
-      whenever(socket.isConnected).thenReturn(false)
-      val joinPush = channel.joinPush
-
-      channel.join()
-
-      // connect socket after a delay
-      fakeClock.tick(6_000)
-      whenever(socket.isConnected).thenReturn(true)
-
-      fakeClock.tick(4_000)
-      joinPush.trigger("ok", kEmptyPayload)
-
-      fakeClock.tick(2_000)
-      assertThat(channel.state).isEqualTo(Channel.State.JOINING)
-
-      joinPush.trigger("ok", kEmptyPayload)
-      assertThat(channel.state).isEqualTo(Channel.State.JOINED)
-    }
-
-    /* End TimeoutBehavior */
+    /* End Join */
   }
 
   @Nested
   @DisplayName("joinPush")
   inner class JoinPush {
 
+    private lateinit var joinPush: Push
+
     /* setup */
     @BeforeEach
     internal fun setUp() {
+      socket = spy(Socket("https://localhost:4000/socket"))
+      socket.dispatchQueue = fakeClock
+
       whenever(socket.isConnected).thenReturn(true)
-      whenever(socket.makeRef()).thenAnswer(mutableRefAnswer)
+
+      channel = Channel("topic", kDefaultPayload, socket)
+      joinPush = channel.joinPush
+
       channel.join()
     }
 
     /* helper methods */
-    private fun receivesOk(joinPush: Push) {
+    private fun receivesOk() {
       fakeClock.tick(joinPush.timeout / 2)
       joinPush.trigger("ok", mapOf("a" to "b"))
     }
 
-    private fun receivesTimeout(joinPush: Push) {
-      fakeClock.tick(joinPush.timeout)
+    private fun receivesTimeout() {
+      fakeClock.tick(joinPush.timeout * 2)
     }
 
-    private fun receivesError(joinPush: Push) {
+    private fun receivesError() {
       fakeClock.tick(joinPush.timeout / 2)
       joinPush.trigger("error", mapOf("a" to "b"))
     }
@@ -347,32 +360,23 @@ class ChannelTest {
     inner class ReceivesOk {
       @Test
       internal fun `sets channel state to joined`() {
-        val joinPush = channel.joinPush
-
         assertThat(channel.state).isNotEqualTo(Channel.State.JOINED)
 
-        receivesOk(joinPush)
+        receivesOk()
         assertThat(channel.state).isEqualTo(Channel.State.JOINED)
       }
 
       @Test
       internal fun `triggers receive(ok) callback after ok response`() {
-        val joinPush = channel.joinPush
-
-        val mockCallback = mock<(Message) -> Unit>()
         joinPush.receive("ok", mockCallback)
 
-        receivesOk(joinPush)
+        receivesOk()
         verify(mockCallback, times(1)).invoke(any())
       }
 
       @Test
       internal fun `triggers receive('ok') callback if ok response already received`() {
-        val joinPush = channel.joinPush
-
-        receivesOk(joinPush)
-
-        val mockCallback = mock<(Message) -> Unit>()
+        receivesOk()
         joinPush.receive("ok", mockCallback)
 
         verify(mockCallback, times(1)).invoke(any())
@@ -380,74 +384,61 @@ class ChannelTest {
 
       @Test
       internal fun `does not trigger other receive callbacks after ok response`() {
-        val joinPush = channel.joinPush
-
-        val mockCallback = mock<(Message) -> Unit>()
         joinPush
             .receive("error", mockCallback)
             .receive("timeout", mockCallback)
 
-        receivesOk(joinPush)
-        receivesTimeout(joinPush)
+        receivesOk()
+        receivesTimeout()
         verify(mockCallback, times(0)).invoke(any())
       }
 
       @Test
       internal fun `clears timeoutTimer workItem`() {
-        val joinPush = channel.joinPush
-
         assertThat(joinPush.timeoutTask).isNotNull()
 
         val mockTimeoutTask = mock<DispatchWorkItem>()
         joinPush.timeoutTask = mockTimeoutTask
 
-        receivesOk(joinPush)
+        receivesOk()
         verify(mockTimeoutTask).cancel()
         assertThat(joinPush.timeoutTask).isNull()
       }
 
       @Test
       internal fun `sets receivedMessage`() {
-        val joinPush = channel.joinPush
-
         assertThat(joinPush.receivedMessage).isNull()
 
-        receivesOk(joinPush)
+        receivesOk()
         assertThat(joinPush.receivedMessage?.payload).isEqualTo(mapOf("status" to "ok", "a" to "b"))
         assertThat(joinPush.receivedMessage?.status).isEqualTo("ok")
       }
 
       @Test
       internal fun `removes channel binding`() {
-        val joinPush = channel.joinPush
-
         var bindings = channel.getBindings("chan_reply_1")
         assertThat(bindings).hasSize(1)
 
-        receivesOk(joinPush)
+        receivesOk()
         bindings = channel.getBindings("chan_reply_1")
         assertThat(bindings).isEmpty()
       }
 
       @Test
       internal fun `resets channel rejoinTimer`() {
-        val joinPush = channel.joinPush
-
         val mockRejoinTimer = mock<TimeoutTimer>()
         channel.rejoinTimer = mockRejoinTimer
 
-        receivesOk(joinPush)
+        receivesOk()
         verify(mockRejoinTimer, times(1)).reset()
       }
 
       @Test
       internal fun `sends and empties channel's buffered pushEvents`() {
-        val joinPush = channel.joinPush
-
         val mockPush = mock<Push>()
         channel.pushBuffer.add(mockPush)
 
-        receivesOk(joinPush)
+        receivesOk()
         verify(mockPush).send()
         assertThat(channel.pushBuffer).isEmpty()
       }
@@ -460,51 +451,52 @@ class ChannelTest {
     inner class ReceivesTimeout {
       @Test
       internal fun `sets channel state to errored`() {
-        val joinPush = channel.joinPush
+        var timeoutReceived = false
+        joinPush.receive("timeout") {
+          timeoutReceived = true
+          assertThat(channel.state).isEqualTo(Channel.State.ERRORED)
+        }
 
-        receivesTimeout(joinPush)
-        assertThat(channel.state).isEqualTo(Channel.State.ERRORED)
+        receivesTimeout()
+        assertThat(timeoutReceived).isTrue()
       }
 
       @Test
       internal fun `triggers receive('timeout') callback after ok response`() {
-        val joinPush = channel.joinPush
-
         val mockCallback = mock<(Message) -> Unit>()
         joinPush.receive("timeout", mockCallback)
 
-        receivesTimeout(joinPush)
+        receivesTimeout()
         verify(mockCallback).invoke(any())
       }
 
       @Test
       internal fun `does not trigger other receive callbacks after timeout response`() {
-        val joinPush = channel.joinPush
-
         val mockOk = mock<(Message) -> Unit>()
         val mockError = mock<(Message) -> Unit>()
-        val mockTimeout = mock<(Message) -> Unit>()
+        var timeoutReceived = false
+
         joinPush
             .receive("ok", mockOk)
             .receive("error", mockError)
-            .receive("timeout", mockTimeout)
+            .receive("timeout") {
+              verifyZeroInteractions(mockOk)
+              verifyZeroInteractions(mockError)
+              timeoutReceived = true
+            }
 
-        receivesTimeout(joinPush)
-        joinPush.trigger("ok", emptyMap())
+        receivesTimeout()
+        receivesOk()
 
-        verifyZeroInteractions(mockOk)
-        verifyZeroInteractions(mockError)
-        verify(mockTimeout).invoke(any())
+        assertThat(timeoutReceived).isTrue()
       }
 
       @Test
       internal fun `schedules rejoinTimer timeout`() {
-        val joinPush = channel.joinPush
-
         val mockTimer = mock<TimeoutTimer>()
         channel.rejoinTimer = mockTimer
 
-        receivesTimeout(joinPush)
+        receivesTimeout()
         verify(mockTimer).scheduleTimeout()
       }
 
@@ -516,22 +508,18 @@ class ChannelTest {
     inner class ReceivesError {
       @Test
       internal fun `triggers receive('error') callback after error response`() {
-        val joinPush = channel.joinPush
-
-        val mockCallback = mock<(Message) -> Unit>()
+        assertThat(channel.state).isEqualTo(Channel.State.JOINING)
         joinPush.receive("error", mockCallback)
 
-        receivesError(joinPush)
-        verify(mockCallback).invoke(any())
+        receivesError()
+        joinPush.trigger("error", kEmptyPayload)
+        verify(mockCallback, times(1)).invoke(any())
       }
 
       @Test
       internal fun `triggers receive('error') callback if error response already received`() {
-        val joinPush = channel.joinPush
+        receivesError()
 
-        receivesError(joinPush)
-
-        val mockCallback = mock<(Message) -> Unit>()
         joinPush.receive("error", mockCallback)
 
         verify(mockCallback).invoke(any())
@@ -539,27 +527,32 @@ class ChannelTest {
 
       @Test
       internal fun `does not trigger other receive callbacks after ok response`() {
-        val joinPush = channel.joinPush
-
-        val mockCallback = mock<(Message) -> Unit>()
+        val mockOk = mock<(Message) -> Unit>()
+        val mockError = mock<(Message) -> Unit>()
+        val mockTimeout = mock<(Message) -> Unit>()
         joinPush
-            .receive("ok", mockCallback)
-            .receive("timeout", mockCallback)
+            .receive("ok", mockOk)
+            .receive("error") {
+              mockError.invoke(it)
+              channel.leave()
+            }
+            .receive("timeout", mockTimeout)
 
-        receivesError(joinPush)
-        receivesTimeout(joinPush)
-        verifyZeroInteractions(mockCallback)
+        receivesError()
+        receivesTimeout()
+
+        verify(mockError, times(1)).invoke(any())
+        verifyZeroInteractions(mockOk)
+        verifyZeroInteractions(mockTimeout)
       }
 
       @Test
       internal fun `clears timeoutTimer workItem`() {
-        val joinPush = channel.joinPush
-
         val mockTask = mock<DispatchWorkItem>()
         assertThat(joinPush.timeoutTask).isNotNull()
 
         joinPush.timeoutTask = mockTask
-        receivesError(joinPush)
+        receivesError()
 
         verify(mockTask).cancel()
         assertThat(joinPush.timeoutTask).isNull()
@@ -567,11 +560,9 @@ class ChannelTest {
 
       @Test
       internal fun `sets receivedMessage`() {
-        val joinPush = channel.joinPush
-
         assertThat(joinPush.receivedMessage).isNull()
 
-        receivesError(joinPush)
+        receivesError()
         assertThat(joinPush.receivedMessage).isNotNull()
         assertThat(joinPush.receivedMessage?.status).isEqualTo("error")
         assertThat(joinPush.receivedMessage?.payload?.get("a")).isEqualTo("b")
@@ -579,32 +570,26 @@ class ChannelTest {
 
       @Test
       internal fun `removes channel binding`() {
-        val joinPush = channel.joinPush
-
         var bindings = channel.getBindings("chan_reply_1")
         assertThat(bindings).hasSize(1)
 
-        receivesError(joinPush)
+        receivesError()
         bindings = channel.getBindings("chan_reply_1")
         assertThat(bindings).isEmpty()
       }
 
       @Test
       internal fun `does not sets channel state to joined`() {
-        val joinPush = channel.joinPush
-
-        receivesError(joinPush)
+        receivesError()
         assertThat(channel.state).isNotEqualTo(Channel.State.JOINED)
       }
 
       @Test
       internal fun `does not trigger channel's buffered pushEvents`() {
-        val joinPush = channel.joinPush
-
         val mockPush = mock<Push>()
         channel.pushBuffer.add(mockPush)
 
-        receivesError(joinPush)
+        receivesError()
         verifyZeroInteractions(mockPush)
         assertThat(channel.pushBuffer).hasSize(1)
       }
@@ -618,11 +603,24 @@ class ChannelTest {
   @Nested
   @DisplayName("onError")
   inner class OnError {
+
+    private lateinit var joinPush: Push
+
+    /* setup */
     @BeforeEach
     internal fun setUp() {
+      socket = spy(Socket("https://localhost:4000/socket"))
+      socket.dispatchQueue = fakeClock
+
       whenever(socket.isConnected).thenReturn(true)
+
+      channel = Channel("topic", kDefaultPayload, socket)
+      joinPush = channel.joinPush
+
       channel.join()
+      joinPush.trigger("ok", kEmptyPayload)
     }
+
 
     @Test
     internal fun `sets channel state to errored`() {
@@ -630,6 +628,25 @@ class ChannelTest {
 
       channel.trigger(Channel.Event.ERROR)
       assertThat(channel.state).isEqualTo(Channel.State.ERRORED)
+    }
+
+    @Test
+    internal fun `does not trigger redundant errors during backoff`() {
+      // Spy the channel's join push
+      joinPush = spy(channel.joinPush)
+      channel.joinPush = joinPush
+
+      verify(joinPush, times(0)).send()
+
+      channel.trigger(Channel.Event.ERROR)
+
+      fakeClock.tick(1000)
+      verify(joinPush, times(1)).send()
+
+      channel.trigger("error")
+
+      fakeClock.tick(1000)
+      verify(joinPush, times(1)).send()
     }
 
     @Test
@@ -645,45 +662,50 @@ class ChannelTest {
     internal fun `does not rejoin if leaving channel`() {
       channel.state = Channel.State.LEAVING
 
-      val mockPush = mock<Push>()
-      channel.joinPush = mockPush
+      // Spy the joinPush
+      joinPush = spy(channel.joinPush)
+      channel.joinPush = joinPush
 
-      channel.trigger(Channel.Event.ERROR)
+      socket.onConnectionError(Throwable(), null)
 
       fakeClock.tick(1_000)
-      verify(mockPush, never()).send()
+      verify(joinPush, never()).send()
 
       fakeClock.tick(2_000)
-      verify(mockPush, never()).send()
+      verify(joinPush, never()).send()
 
       assertThat(channel.state).isEqualTo(Channel.State.LEAVING)
     }
 
     @Test
-    internal fun `does nothing if channel is closed`() {
+    internal fun `does not rejoin if channel is closed`() {
       channel.state = Channel.State.CLOSED
 
-      val mockPush = mock<Push>()
-      channel.joinPush = mockPush
+      // Spy the joinPush
+      joinPush = spy(channel.joinPush)
+      channel.joinPush = joinPush
 
-      channel.trigger(Channel.Event.ERROR)
+      socket.onConnectionError(Throwable(), null)
 
       fakeClock.tick(1_000)
-      verify(mockPush, never()).send()
+      verify(joinPush, never()).send()
 
       fakeClock.tick(2_000)
-      verify(mockPush, never()).send()
+      verify(joinPush, never()).send()
 
       assertThat(channel.state).isEqualTo(Channel.State.CLOSED)
     }
 
     @Test
-    internal fun `triggers additional callbacks`() {
-      val mockCallback = mock<(Message) -> Unit>()
+    internal fun `triggers additional callbacks after join`() {
       channel.onError(mockCallback)
+      joinPush.trigger("ok", kEmptyPayload)
+
+      assertThat(channel.state).isEqualTo(Channel.State.JOINED)
+      verifyZeroInteractions(mockCallback)
 
       channel.trigger(Channel.Event.ERROR)
-      verify(mockCallback).invoke(any())
+      verify(mockCallback, times(1)).invoke(any())
     }
 
     /* End OnError */
@@ -692,11 +714,23 @@ class ChannelTest {
   @Nested
   @DisplayName("onClose")
   inner class OnClose {
+
+    private lateinit var joinPush: Push
+
+    /* setup */
     @BeforeEach
     internal fun setUp() {
+      socket = spy(Socket("https://localhost:4000/socket"))
+      socket.dispatchQueue = fakeClock
+
       whenever(socket.isConnected).thenReturn(true)
+
+      channel = Channel("topic", kDefaultPayload, socket)
+      joinPush = channel.joinPush
+
       channel.join()
     }
+
 
     @Test
     internal fun `sets state to closed`() {
@@ -708,11 +742,17 @@ class ChannelTest {
 
     @Test
     internal fun `does not rejoin`() {
-      val mockPush = mock<Push>()
-      channel.joinPush = mockPush
+      // Spy the channel's join push
+      joinPush = spy(channel.joinPush)
+      channel.joinPush = joinPush
 
       channel.trigger(Channel.Event.CLOSE)
-      verify(mockPush, never()).send()
+
+      fakeClock.tick(1_000)
+      verify(joinPush, never()).send()
+
+      fakeClock.tick(2_000)
+      verify(joinPush, never()).send()
     }
 
     @Test
@@ -725,18 +765,18 @@ class ChannelTest {
     }
 
     @Test
-    internal fun `removes self from socket`() {
+    internal fun `removes channel from socket`() {
       channel.trigger(Channel.Event.CLOSE)
       verify(socket).remove(channel)
     }
 
     @Test
     internal fun `triggers additional callbacks`() {
-      val mockCallback = mock<(Message) -> Unit>()
       channel.onClose(mockCallback)
+      verifyZeroInteractions(mockCallback)
 
       channel.trigger(Channel.Event.CLOSE)
-      verify(mockCallback).invoke(any())
+      verify(mockCallback, times(1)).invoke(any())
     }
 
     /* End OnClose */

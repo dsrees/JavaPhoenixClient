@@ -6,7 +6,7 @@ class ManualDispatchWorkItem(
   private val runnable: () -> Unit,
   var deadline: Long,
   private val period: Long = 0
-) : DispatchWorkItem {
+) : DispatchWorkItem, Comparable<ManualDispatchWorkItem> {
 
   private var performCount = 0
 
@@ -29,5 +29,9 @@ class ManualDispatchWorkItem(
 
   override fun cancel() {
     this.isCancelled = true
+  }
+
+  override fun compareTo(other: ManualDispatchWorkItem): Int {
+    return deadline.compareTo(other.deadline)
   }
 }

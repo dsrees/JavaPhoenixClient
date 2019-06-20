@@ -34,11 +34,6 @@ object Defaults {
   /** Default heartbeat interval of 30s */
   const val HEARTBEAT: Long = 30_000
 
-  /** Default reconnect algorithm. Reconnects after 1s, 2s, 5s and then 10s thereafter */
-  val steppedBackOff: (Int) -> Long = { tries ->
-    if (tries > 3) 10_000 else listOf(1_000L, 2_000L, 5_000L)[tries - 1]
-  }
-
   /** Default reconnect algorithm for the socket */
   val reconnectSteppedBackOff: (Int) -> Long = { tries ->
     if (tries > 9) 5_000 else listOf(10L, 50L, 100L, 150L, 200L, 250L, 500L, 1_000L, 2_000L)[tries - 1]
