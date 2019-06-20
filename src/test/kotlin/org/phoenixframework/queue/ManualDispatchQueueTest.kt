@@ -22,6 +22,32 @@ internal class ManualDispatchQueueTest {
   }
 
   @Test
+  internal fun `reset the queue`() {
+    var task100Called = false
+    var task200Called = false
+    var task300Called = false
+
+    queue.queue(100, TimeUnit.MILLISECONDS) {
+      task100Called = true
+    }
+    queue.queue(200, TimeUnit.MILLISECONDS) {
+      task200Called = true
+    }
+    queue.queue(300, TimeUnit.MILLISECONDS) {
+      task300Called = true
+    }
+
+    queue.tick(250)
+
+    assertThat(queue.tickTime).isEqualTo(250)
+    assertThat(queue.workItems).hasSize(1)
+
+    queue.reset()
+    assertThat(queue.tickTime).isEqualTo(0)
+    assertThat(queue.workItems).isEmpty()
+  }
+
+  @Test
   internal fun `triggers work that is passed due`() {
     var task100Called = false
     var task200Called = false
@@ -92,6 +118,8 @@ internal class ManualDispatchQueueTest {
     assertThat(task100Called).isTrue()
     assertThat(task200Called).isTrue()
     assertThat(task300Called).isFalse()
+
+    assertThat(queue.tickTime).isEqualTo(250)
   }
 
 

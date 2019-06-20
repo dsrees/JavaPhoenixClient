@@ -6,9 +6,9 @@ import java.util.concurrent.TimeUnit
 
 class ManualDispatchQueue : DispatchQueue {
 
-  private var tickTime: Long = 0
+  var tickTime: Long = 0
   private val tickTimeUnit: TimeUnit = TimeUnit.MILLISECONDS
-  private var workItems: MutableList<ManualDispatchWorkItem> = mutableListOf()
+  var workItems: MutableList<ManualDispatchWorkItem> = mutableListOf()
 
   fun reset() {
     this.tickTime = 0
