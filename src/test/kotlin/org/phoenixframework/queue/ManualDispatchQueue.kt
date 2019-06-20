@@ -23,20 +23,18 @@ class ManualDispatchQueue : DispatchQueue {
 
     // Filter all work items that are due to be fired and have not been
     // cancelled. Return early if there are no items to fire
-    var pastDueWorkItems = workItems.filter { it.isPastDue(advanceTo) && !it.isCancelled }
+    var pastDueWorkItems = workItems.filter { it.isPastDue(advanceTo) && !it.isCancelled }.sorted()
 
     // Keep looping until there are no more work items that are passed the advance to time
     while (pastDueWorkItems.isNotEmpty()) {
 
-      // Perform all work items that are due
-      pastDueWorkItems.forEach {
-        tickTime = it.deadline
-        it.perform()
-      }
+      val firstItem = pastDueWorkItems.first()
+      tickTime = firstItem.deadline
+      firstItem.perform()
 
       // Remove all work items that are past due or canceled
       workItems.removeAll { it.isPastDue(tickTime) || it.isCancelled }
-      pastDueWorkItems = workItems.filter { it.isPastDue(advanceTo) && !it.isCancelled }
+      pastDueWorkItems = workItems.filter { it.isPastDue(advanceTo) && !it.isCancelled }.sorted()
     }
 
     // Now that all work has been performed, advance the clock

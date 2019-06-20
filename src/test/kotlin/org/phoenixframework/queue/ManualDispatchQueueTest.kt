@@ -122,6 +122,53 @@ internal class ManualDispatchQueueTest {
     assertThat(queue.tickTime).isEqualTo(250)
   }
 
+  @Test
+  internal fun `triggers work in order of deadline`() {
+    var task200Called = false
+    var task100Called = false
+
+
+    val task200 = queue.queue(200, TimeUnit.MILLISECONDS) {
+      task200Called = true
+    }
+
+    queue.queue(100, TimeUnit.MILLISECONDS) {
+      task100Called = true
+      task200.cancel()
+    }
+
+
+    queue.tick(300)
+    assertThat(task100Called).isTrue()
+    assertThat(task200Called).isFalse()
+  }
+
+  @Test
+  internal fun `triggers inserted work in order of deadline`() {
+    var task500Called = false
+    var task200Called = false
+    var task100Called = false
+
+    val task500 = queue.queue(500, TimeUnit.MILLISECONDS) {
+      task500Called = true
+    }
+
+    queue.queue(200, TimeUnit.MILLISECONDS) {
+      task200Called = true
+
+      queue.queue(100, TimeUnit.MILLISECONDS) {
+        task100Called = true
+        task500.cancel()
+      }
+    }
+
+    queue.tick(600)
+    assertThat(task100Called).isTrue()
+    assertThat(task200Called).isTrue()
+    assertThat(task500Called).isFalse()
+  }
+
+
 
   @Test
   internal fun `does not triggers nested work that is scheduled outside of the tick`() {
