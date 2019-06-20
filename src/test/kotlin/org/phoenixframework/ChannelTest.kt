@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.stubbing.Answer
-import org.phoenixframework.utilities.ManualDispatchQueue
+import org.phoenixframework.queue.ManualDispatchQueue
 import org.phoenixframework.utilities.getBindings
 
 class ChannelTest {
@@ -302,7 +302,7 @@ class ChannelTest {
       fakeClock.tick(6_000)
       whenever(socket.isConnected).thenReturn(true)
 
-      fakeClock.tick(5_000)
+      fakeClock.tick(4_000)
       joinPush.trigger("ok", kEmptyPayload)
 
       fakeClock.tick(2_000)
@@ -334,7 +334,7 @@ class ChannelTest {
     }
 
     private fun receivesTimeout(joinPush: Push) {
-      fakeClock.tick(joinPush.timeout * 2)
+      fakeClock.tick(joinPush.timeout)
     }
 
     private fun receivesError(joinPush: Push) {
