@@ -22,6 +22,12 @@ import org.phoenixframework.utilities.getBindings
 
 class ChannelTest {
 
+  companion object {
+    const val DEFAULT_REF = "1"
+    const val DEFAULT_TIMEOUT = 10_000L
+  }
+
+
   @Mock lateinit var socket: Socket
   @Mock lateinit var mockCallback: ((Message) -> Unit)
 
@@ -29,7 +35,6 @@ class ChannelTest {
   private val kDefaultTimeout = 10_000L
   private val kDefaultPayload: Payload = mapOf("one" to "two")
   private val kEmptyPayload: Payload = mapOf()
-  private val reconnectAfterMs: (Int) -> Long = Defaults.steppedBackOff
 
   lateinit var fakeClock: ManualDispatchQueue
   lateinit var channel: Channel
@@ -50,7 +55,8 @@ class ChannelTest {
     whenever(socket.dispatchQueue).thenReturn(fakeClock)
     whenever(socket.makeRef()).thenReturn(kDefaultRef)
     whenever(socket.timeout).thenReturn(kDefaultTimeout)
-    whenever(socket.reconnectAfterMs).thenReturn(reconnectAfterMs)
+    whenever(socket.reconnectAfterMs).thenReturn(Defaults.reconnectSteppedBackOff)
+    whenever(socket.rejoinAfterMs).thenReturn(Defaults.rejoinSteppedBackOff)
 
     channel = Channel("topic", kDefaultPayload, socket)
   }

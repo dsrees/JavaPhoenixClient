@@ -38,6 +38,7 @@ class PresenceTest {
     whenever(socket.timeout).thenReturn(Defaults.TIMEOUT)
     whenever(socket.makeRef()).thenReturn("1")
     whenever(socket.reconnectAfterMs).thenReturn { 1_000 }
+    whenever(socket.rejoinAfterMs).thenReturn(Defaults.rejoinSteppedBackOff)
     whenever(socket.dispatchQueue).thenReturn(mock())
 
     channel = Channel("topic", mapOf(), socket)
