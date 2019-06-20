@@ -48,11 +48,11 @@ internal data class StateChangeCallbacks(
   }
 }
 
-/** The code used when the socket was closed without error */
+/** RFC 6455: indicates a normal closure */
 const val WS_CLOSE_NORMAL = 1000
 
-/** The socket was closed due to a SocketException. Likely the client lost connectivity */
-const val WS_CLOSE_SOCKET_EXCEPTION = 4000
+/** RFC 6455: indicates that the connection was closed abnormally */
+const val WS_CLOSE_ABNORMAL = 1006
 
 
 /**
@@ -88,11 +88,14 @@ class Socket(
   /** Timeout to use when opening a connection */
   var timeout: Long = Defaults.TIMEOUT
 
-  /** Interval between sending a heartbeat */
-  var heartbeatInterval: Long = Defaults.HEARTBEAT
+  /** Interval between sending a heartbeat, in ms */
+  var heartbeatIntervalMs: Long = Defaults.HEARTBEAT
 
-  /** Internval between socket reconnect attempts */
-  var reconnectAfterMs: ((Int) -> Long) = Defaults.steppedBackOff
+  /** Interval between socket reconnect attempts, in ms */
+  var reconnectAfterMs: ((Int) -> Long) = Defaults.reconnectSteppedBackOff
+
+  /** Interval between channel rejoin attempts, in ms */
+  var rejoinAfterMs: ((Int) -> Long) = Defaults.rejoinSteppedBackOff
 
   /** The optional function to receive logs */
   var logger: ((String) -> Unit)? = null
@@ -138,6 +141,9 @@ class Socket(
 
   /** Timer to use when attempting to reconnect */
   internal var reconnectTimer: TimeoutTimer
+
+  /** True if the Socket closed cleaned. False if not (connection timeout, heartbeat, etc) */
+  internal var closeWasClean = false
 
   //------------------------------------------------------------------------------
   // Connection Attributes
@@ -218,6 +224,9 @@ class Socket(
     // Do not attempt to connect if already connected
     if (isConnected) return
 
+    // Reset the clean close flag when attempting to connect
+    this.closeWasClean = false
+
     this.connection = this.transport(endpointUrl)
     this.connection?.onOpen = { onConnectionOpened() }
     this.connection?.onClose = { code -> onConnectionClosed(code) }
@@ -231,6 +240,10 @@ class Socket(
     reason: String? = null,
     callback: (() -> Unit)? = null
   ) {
+    // The socket was closed cleanly by the User
+    this.closeWasClean = true
+
+    // Reset any reconnects and teardown the socket connection
     this.reconnectTimer.reset()
     this.teardown(code, reason, callback)
 
@@ -339,7 +352,12 @@ class Socket(
 
   /** Triggers an error event to all connected Channels */
   private fun triggerChannelError() {
-    this.channels.forEach { it.trigger(Channel.Event.ERROR.value) }
+    this.channels.forEach { channel ->
+      // Only trigger a channel error if it is in an "opened" state
+      if (!(channel.isErrored || channel.isLeaving || channel.isClosed)) {
+        channel.trigger(Channel.Event.ERROR.value)
+      }
+    }
   }
 
   /** Send all messages that were buffered before the socket opened */
@@ -361,8 +379,8 @@ class Socket(
 
     // Do not start up the heartbeat timer if skipHeartbeat is true
     if (skipHeartbeat) return
-    val delay = heartbeatInterval
-    val period = heartbeatInterval
+    val delay = heartbeatIntervalMs
+    val period = heartbeatIntervalMs
 
     heartbeatTask =
         dispatchQueue.queueAtFixedRate(delay, period, TimeUnit.MILLISECONDS) { sendHeartbeat() }
@@ -379,9 +397,8 @@ class Socket(
       pendingHeartbeatRef = null
       logItems("Transport: Heartbeat timeout. Attempt to re-establish connection")
 
-      // Disconnect the socket manually. Do not use `teardown` or
-      // `disconnect` as they will nil out the websocket delegate
-      this.connection?.disconnect(WS_CLOSE_NORMAL, "Heartbeat timed out")
+      // Close the socket, flagging the closure as abnormal
+      this.abnormalClose("heartbeat timeout")
       return
     }
 
@@ -394,11 +411,25 @@ class Socket(
         ref = pendingHeartbeatRef)
   }
 
+  private fun abnormalClose(reason: String) {
+    this.closeWasClean = false
+
+    /*
+      We use NORMAL here since the client is the one determining to close the connection. However,
+      we keep a flag `closeWasClean` set to false so that the client knows that it should attempt
+      to reconnect.
+     */
+    this.connection?.disconnect(WS_CLOSE_NORMAL, reason)
+  }
+
   //------------------------------------------------------------------------------
   // Connection Transport Hooks
   //------------------------------------------------------------------------------
   internal fun onConnectionOpened() {
     this.logItems("Transport: Connected to $endpoint")
+
+    // Reset the closeWasClean flag now that the socket has been connected
+    this.closeWasClean = false
 
     // Send any messages that were waiting for a connection
     this.flushSendBuffer()
@@ -421,14 +452,13 @@ class Socket(
     this.heartbeatTask?.cancel()
     this.heartbeatTask = null
 
+    // Only attempt to reconnect if the socket did not close normally
+    if (!this.closeWasClean) {
+      this.reconnectTimer.scheduleTimeout()
+    }
+
     // Inform callbacks the socket closed
     this.stateChangeCallbacks.close.forEach { it.invoke() }
-
-    // If there was a non-normal event when the connection closed, attempt
-    // to schedule a reconnect attempt
-    if (code != WS_CLOSE_NORMAL) {
-      reconnectTimer.scheduleTimeout()
-    }
   }
 
   internal fun onConnectionMessage(rawMessage: String) {
