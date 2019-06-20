@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.stubbing.Answer
-import org.phoenixframework.utilities.ManualDispatchQueue
+import org.phoenixframework.queue.ManualDispatchQueue
 import org.phoenixframework.utilities.getBindings
 
 class ChannelTest {
