@@ -54,9 +54,6 @@ const val WS_CLOSE_NORMAL = 1000
 /** RFC 6455: indicates that the connection was closed abnormally */
 const val WS_CLOSE_ABNORMAL = 1006
 
-/** The socket was closed due to a SocketException. Likely the client lost connectivity */
-// DEPRECATED
-const val WS_CLOSE_SOCKET_EXCEPTION = 4000
 
 /**
  * Connects to a Phoenix Server
@@ -414,8 +411,14 @@ class Socket(
         ref = pendingHeartbeatRef)
   }
 
-  internal fun abnormalClose(reason: String) {
+  private fun abnormalClose(reason: String) {
     this.closeWasClean = false
+
+    /*
+      We use NORMAL here since the client is the one determining to close the connection. However,
+      we keep a flag `closeWasClean` set to false so that the client knows that it should attempt
+      to reconnect.
+     */
     this.connection?.disconnect(WS_CLOSE_NORMAL, reason)
   }
 

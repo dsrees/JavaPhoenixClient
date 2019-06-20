@@ -14,8 +14,6 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
-import org.phoenixframework.Transport
-import org.phoenixframework.WebSocketTransport
 import java.net.SocketException
 import java.net.URL
 
@@ -124,7 +122,7 @@ class WebSocketTransportTest {
       val throwable = SocketException()
       transport.onFailure(mockWebSocket, throwable, mockResponse)
       verify(mockOnError).invoke(throwable, mockResponse)
-      verify(mockOnClose).invoke(4000)
+      verify(mockOnClose).invoke(1006)
     }
 
     /* End OnFailure */

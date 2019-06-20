@@ -295,6 +295,14 @@ class SocketTest {
     }
 
     @Test
+    internal fun `flags the socket as closed cleanly`() {
+      assertThat(socket.closeWasClean).isFalse()
+
+      socket.disconnect()
+      assertThat(socket.closeWasClean).isTrue()
+    }
+
+    @Test
     internal fun `calls callback`() {
       val mockCallback = mock<() -> Unit> {}
 

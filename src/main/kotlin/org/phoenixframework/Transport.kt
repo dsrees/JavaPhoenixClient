@@ -27,7 +27,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import java.io.IOException
 import java.net.URL
 
 /**
@@ -130,13 +129,28 @@ class WebSocketTransport(
   }
 
   override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+    // Set the state of the Transport as CLOSED since no more data will be received
     this.readyState = Transport.ReadyState.CLOSED
+
+    // Invoke the onError callback, to inform of the error
     this.onError?.invoke(t, response)
-    
-    // Check if the socket was closed for some recoverable reason
-    when (t) {
-      is IOException -> this.onClosed(webSocket, WS_CLOSE_SOCKET_EXCEPTION, "IOException")
-    }
+
+    /*
+      According to the OkHttp documentation, `onFailure` will be
+
+      "Invoked when a web socket has been closed due to an error reading from or writing to the
+      network. Both outgoing and incoming messages may have been lost. No further calls to this
+      listener will be made."
+
+      This means `onClose` will never be called which will never kick off the socket reconnect
+      attempts.
+
+      The JS WebSocket class calls `onError` and then `onClose` which will then trigger
+      the reconnect logic inside of the PhoenixClient. In order to mimic this behavior and abstract
+      this detail of OkHttp away from the PhoenixClient, the `WebSocketTransport` class should
+      convert `onFailure` calls to an `onError` and `onClose` sequence.
+     */
+    this.onClose?.invoke(WS_CLOSE_ABNORMAL)
   }
 
   override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
