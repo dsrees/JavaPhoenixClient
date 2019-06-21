@@ -23,11 +23,11 @@ class MainActivity : AppCompatActivity() {
 
   // Use when connecting to https://github.com/dwyl/phoenix-chat-example
   private val socket = Socket("https://phxchat.herokuapp.com/socket/websocket")
-  private val topic = "rooms:lobby"
+  private val topic = "room:lobby"
 
   // Use when connecting to local server
 //  private val socket = Socket("ws://10.0.2.2:4000/socket/websocket")
-//  private val topic = "room:lobby"
+//  private val topic = "rooms:lobby"
 
   private var lobbyChannel: Channel? = null
 

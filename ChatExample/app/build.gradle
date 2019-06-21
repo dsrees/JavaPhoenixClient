@@ -40,8 +40,8 @@ dependencies {
 //    implementation 'com.github.dsrees:JavaPhoenixClient:0.2.3'
 
 
-    compile "com.google.code.gson:gson:2.8.5"
-    compile "com.squareup.okhttp3:okhttp:3.12.2"
+    implementation "com.google.code.gson:gson:2.8.5"
+    implementation "com.squareup.okhttp3:okhttp:3.12.2"
 
 
     implementation"org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
