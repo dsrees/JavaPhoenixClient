@@ -314,6 +314,19 @@ class ChannelTest {
         assertThat(channel.state).isEqualTo(Channel.State.JOINED)
       }
 
+
+      @Test
+      internal fun `does not enter rejoin loop if leave is called before joined`() {
+        socket.connect()
+        this.receiveSocketOpen()
+
+        channel.join()
+        channel.leave()
+
+        fakeClock.tick(channel.timeout * 4)
+        verify(socket, times(2)).push(any(), any(), any(), any(), any())
+      }
+
       /* End TimeoutBehavior */
     }
 
@@ -1042,6 +1055,7 @@ class ChannelTest {
       channel.leave()
       assertThat(channel.state).isEqualTo(Channel.State.CLOSED)
     }
+
     /* End Leave */
   }
 

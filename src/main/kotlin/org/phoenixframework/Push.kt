@@ -177,7 +177,7 @@ class Push(
   }
 
   /** Cancels any ongoing timeout task */
-  private fun cancelTimeout() {
+  internal fun cancelTimeout() {
     this.timeoutTask?.cancel()
     this.timeoutTask = null
   }

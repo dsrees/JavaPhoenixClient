@@ -320,6 +320,9 @@ class Channel(
     // If attempting a rejoin during a leave, then reset, cancelling the rejoin
     this.rejoinTimer.reset()
 
+    // Prevent entering a rejoin loop if leaving a channel before joined
+    this.joinPush.cancelTimeout()
+
     // Now set the state to leaving
     this.state = State.LEAVING
 
