@@ -267,6 +267,20 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
     ): PresenceState {
       val state = cloneState(currentState)
 
+      // Sync the left diff and inform onLeave of left presence
+      diff["leaves"]?.forEach { (key, leftPresence) ->
+        val curPresence = state[key] ?: return@forEach
+
+        val refsToRemove = leftPresence["metas"]!!.map { it["phx_ref"] as String }
+        curPresence["metas"] =
+                curPresence["metas"]!!.filter { m -> refsToRemove.indexOf(m["phx_ref"]) < 0 }
+
+        onLeave.invoke(key, curPresence, leftPresence)
+        if (curPresence["metas"]?.isEmpty() == true) {
+          state.remove(key)
+        }
+      }
+
       // Sync the joined states and inform onJoin of new presence
       diff["joins"]?.forEach { (key, newPresence) ->
         val currentPresence = state[key]
@@ -285,20 +299,6 @@ class Presence(channel: Channel, opts: Options = Options.defaults) {
         }
 
         onJoin.invoke(key, currentPresence, newPresence)
-      }
-
-      // Sync the left diff and inform onLeave of left presence
-      diff["leaves"]?.forEach { (key, leftPresence) ->
-        val curPresence = state[key] ?: return@forEach
-
-        val refsToRemove = leftPresence["metas"]!!.map { it["phx_ref"] as String }
-        curPresence["metas"] =
-            curPresence["metas"]!!.filter { m -> refsToRemove.indexOf(m["phx_ref"]) < 0 }
-
-        onLeave.invoke(key, curPresence, leftPresence)
-        if (curPresence["metas"]?.isEmpty() == true) {
-          state.remove(key)
-        }
       }
 
       return state
