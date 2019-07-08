@@ -277,7 +277,12 @@ class Socket(
   }
 
   fun remove(channel: Channel) {
-    this.channels.removeAll { it.joinRef == channel.joinRef }
+    // To avoid a ConcurrentModificationException, filter out the channels to be
+    // removed instead of calling .remove() on the list, thus returning a new list
+    // that does not contain the channel that was removed.
+    this.channels = channels
+        .filter { it.joinRef != channel.joinRef }
+        .toMutableList()
   }
 
   //------------------------------------------------------------------------------
