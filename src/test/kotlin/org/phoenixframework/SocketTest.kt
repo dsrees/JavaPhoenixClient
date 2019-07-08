@@ -386,6 +386,41 @@ class SocketTest {
       assertThat(socket.channels).contains(channel2)
     }
 
+    @Test
+    internal fun `does not throw exception when iterating over channels`() {
+      val channel1 = socket.channel("topic-1")
+      val channel2 = socket.channel("topic-2")
+
+      channel1.joinPush.ref = "1"
+      channel2.joinPush.ref = "2"
+
+      channel1.join().trigger("ok", emptyMap())
+      channel2.join().trigger("ok", emptyMap())
+
+
+      var chan1Called = false
+      channel1.onError { chan1Called = true }
+
+      var chan2Called = false
+      channel2.onError {
+        chan2Called = true
+        socket.remove(channel2)
+      }
+
+      // This will trigger an iteration over the socket.channels list which will trigger
+      // channel2.onError. That callback will attempt to remove channel2 during iteration
+      // which would throw a ConcurrentModificationException if the socket.remove method
+      // is implemented incorrectly.
+      socket.onConnectionError(IllegalStateException(), null)
+
+      // Assert that both on all error's got called even when a channel was removed
+      assertThat(chan1Called).isTrue()
+      assertThat(chan2Called).isTrue()
+
+      assertThat(socket.channels).doesNotContain(channel2)
+      assertThat(socket.channels).contains(channel1)
+    }
+
     /* End Remove */
   }
 
