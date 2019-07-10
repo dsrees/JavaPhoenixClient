@@ -351,13 +351,14 @@ class Socket(
 
     // Since the connections onClose was null'd out, inform all state callbacks
     // that the Socket has closed
-    this.stateChangeCallbacks.close.forEach { it.invoke() }
+    this.stateChangeCallbacks.close.toList().forEach { it.invoke() }
     callback?.invoke()
   }
 
   /** Triggers an error event to all connected Channels */
   private fun triggerChannelError() {
-    this.channels.forEach { channel ->
+    // Copy channel list before iterating in case handlers try to modify channels
+    this.channels.toList().forEach { channel ->
       // Only trigger a channel error if it is in an "opened" state
       if (!(channel.isErrored || channel.isLeaving || channel.isClosed)) {
         channel.trigger(Channel.Event.ERROR.value)
@@ -446,7 +447,7 @@ class Socket(
     this.resetHeartbeat()
 
     // Inform all onOpen callbacks that the Socket has opened
-    this.stateChangeCallbacks.open.forEach { it.invoke() }
+    this.stateChangeCallbacks.open.toList().forEach { it.invoke() }
   }
 
   internal fun onConnectionClosed(code: Int) {
@@ -463,7 +464,7 @@ class Socket(
     }
 
     // Inform callbacks the socket closed
-    this.stateChangeCallbacks.close.forEach { it.invoke() }
+    this.stateChangeCallbacks.close.toList().forEach { it.invoke() }
   }
 
   internal fun onConnectionMessage(rawMessage: String) {
@@ -478,10 +479,12 @@ class Socket(
     // Dispatch the message to all channels that belong to the topic
     this.channels
         .filter { it.isMember(message) }
+         // Copy channel list before iterating in case handlers try to modify channels
+        .toList()
         .forEach { it.trigger(message) }
 
     // Inform all onMessage callbacks of the message
-    this.stateChangeCallbacks.message.forEach { it.invoke(message) }
+    this.stateChangeCallbacks.message.toList().forEach { it.invoke(message) }
   }
 
   internal fun onConnectionError(t: Throwable, response: Response?) {
@@ -491,7 +494,7 @@ class Socket(
     this.triggerChannelError()
 
     // Inform any state callbacks of the error
-    this.stateChangeCallbacks.error.forEach { it.invoke(t, response) }
+    this.stateChangeCallbacks.error.toList().forEach { it.invoke(t, response) }
   }
 
 }
