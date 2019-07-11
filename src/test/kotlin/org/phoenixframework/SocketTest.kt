@@ -680,8 +680,38 @@ class SocketTest {
       assertThat(threeCalled).isEqualTo(0)
     }
 
-    /* End OnConnectionOpened */
-  }
+    @Test
+    internal fun `attach callback during callback`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onOpen {
+        socket.onOpen { twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `open channel during callback`() {
+      var oneCalled = 0
+      socket.onOpen {
+        val channel = socket.channel("foo")
+        oneCalled += 1
+      }
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(1)
+    }
+
+  /* End OnConnectionOpened */
+}
 
   @Nested
   @DisplayName("onConnectionClosed")
