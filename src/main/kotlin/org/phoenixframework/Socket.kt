@@ -33,18 +33,51 @@ import java.util.concurrent.TimeUnit
 typealias Payload = Map<String, Any>
 
 /** Data class that holds callbacks assigned to the socket */
-internal data class StateChangeCallbacks(
-  val open: MutableList<() -> Unit> = ArrayList(),
-  val close: MutableList<() -> Unit> = ArrayList(),
-  val error: MutableList<(Throwable, Response?) -> Unit> = ArrayList(),
-  val message: MutableList<(Message) -> Unit> = ArrayList()
-) {
+internal class StateChangeCallbacks {
+
+  var open: List<() -> Unit> = ArrayList()
+    private set
+  var close: List<() -> Unit> = ArrayList()
+    private set
+  var error: List<(Throwable, Response?) -> Unit> = ArrayList()
+    private set
+  var message: List<(Message) -> Unit> = ArrayList()
+    private set
+
+  /** Safely adds an onOpen callback */
+  fun onOpen(callback: () -> Unit) {
+    this.open = toMutateAdd(open, callback)
+  }
+
+  /** Safely adds an onClose callback */
+  fun onClose(callback: () -> Unit) {
+    this.close = toMutateAdd(close, callback)
+  }
+
+  /** Safely adds an onError callback */
+  fun onError(callback: (Throwable, Response?) -> Unit) {
+    this.error = toMutateAdd(error, callback)
+  }
+
+  /** Safely adds an onMessage callback */
+  fun onMessage(callback: (Message) -> Unit) {
+    this.message = toMutateAdd(message, callback)
+  }
+
   /** Clears all stored callbacks */
   fun release() {
-    open.clear()
-    close.clear()
-    error.clear()
-    message.clear()
+    open = emptyList()
+    close = emptyList()
+    error = emptyList()
+    message = emptyList()
+  }
+
+
+  private fun <T> toMutateAdd(list: List<T>, callback: T): List<T> {
+    val temp = list.toMutableList()
+    temp.add(callback)
+
+    return temp
   }
 }
 
@@ -53,7 +86,6 @@ const val WS_CLOSE_NORMAL = 1000
 
 /** RFC 6455: indicates that the connection was closed abnormally */
 const val WS_CLOSE_ABNORMAL = 1006
-
 
 /**
  * Connects to a Phoenix Server
@@ -250,19 +282,19 @@ class Socket(
   }
 
   fun onOpen(callback: (() -> Unit)) {
-    this.stateChangeCallbacks.open.add(callback)
+    this.stateChangeCallbacks.onOpen(callback)
   }
 
   fun onClose(callback: () -> Unit) {
-    this.stateChangeCallbacks.close.add(callback)
+    this.stateChangeCallbacks.onClose(callback)
   }
 
   fun onError(callback: (Throwable, Response?) -> Unit) {
-    this.stateChangeCallbacks.error.add(callback)
+    this.stateChangeCallbacks.onError(callback)
   }
 
   fun onMessage(callback: (Message) -> Unit) {
-    this.stateChangeCallbacks.message.add(callback)
+    this.stateChangeCallbacks.onMessage(callback)
   }
 
   fun removeAllCallbacks() {

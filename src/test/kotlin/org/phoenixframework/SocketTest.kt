@@ -397,7 +397,6 @@ class SocketTest {
       channel1.join().trigger("ok", emptyMap())
       channel2.join().trigger("ok", emptyMap())
 
-
       var chan1Called = false
       channel1.onError { chan1Called = true }
 
@@ -922,5 +921,98 @@ class SocketTest {
 
     /* End OnConnectionMessage */
   }
+
+
+  @Nested
+  @DisplayName("ConcurrentModificationException")
+  inner class ConcurrentModificationExceptionTests {
+
+    @Test
+    internal fun `onOpen does not throw`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onOpen {
+        socket.onOpen { twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `onClose does not throw`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onClose {
+        socket.onClose { twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionClosed(1000)
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionClosed(1001)
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `onError does not throw`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onError { _, _->
+        socket.onError { _, _ -> twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionError(Throwable(), null)
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionError(Throwable(), null)
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `onMessage does not throw`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onMessage {
+        socket.onMessage { twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionMessage("{\"status\":\"ok\"}")
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionMessage("{\"status\":\"ok\"}")
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `does not throw when adding channel`() {
+      var oneCalled = 0
+      socket.onOpen {
+        val channel = socket.channel("foo")
+        oneCalled += 1
+      }
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(1)
+    }
+
+    /* End ConcurrentModificationExceptionTests */
+  }
+
 
 }
