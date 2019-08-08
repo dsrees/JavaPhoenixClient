@@ -95,7 +95,7 @@ class Push(
 
     // If a previous hook for this status already exists. Just append the new hook. If not, then
     // create a new array of hooks if no previous hook is associated with status
-    receiveHooks[status] = receiveHooks[status]?.copyAndAdd(callback) ?: arrayListOf(callback)
+    receiveHooks[status] = receiveHooks[status]?.plus(callback) ?: arrayListOf(callback)
 
     return this
   }

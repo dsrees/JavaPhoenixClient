@@ -46,22 +46,22 @@ internal class StateChangeCallbacks {
 
   /** Safely adds an onOpen callback */
   fun onOpen(callback: () -> Unit) {
-    this.open = this.open.copyAndAdd(callback)
+    this.open = this.open + callback
   }
 
   /** Safely adds an onClose callback */
   fun onClose(callback: () -> Unit) {
-    this.close = this.close.copyAndAdd(callback)
+    this.close = this.close + callback
   }
 
   /** Safely adds an onError callback */
   fun onError(callback: (Throwable, Response?) -> Unit) {
-    this.error = this.error.copyAndAdd(callback)
+    this.error = this.error + callback
   }
 
   /** Safely adds an onMessage callback */
   fun onMessage(callback: (Message) -> Unit) {
-    this.message = this.message.copyAndAdd(callback)
+    this.message = this.message + callback
   }
 
   /** Clears all stored callbacks */
@@ -72,15 +72,6 @@ internal class StateChangeCallbacks {
     message = emptyList()
   }
 }
-
-/** Converts the List to a MutableList, adds the value, and then returns as a read-only List */
-fun <T> List<T>.copyAndAdd(value: T): List<T> {
-  val temp = this.toMutableList()
-  temp.add(value)
-
-  return temp
-}
-
 
 /** RFC 6455: indicates a normal closure */
 const val WS_CLOSE_NORMAL = 1000
@@ -304,7 +295,7 @@ class Socket(
 
   fun channel(topic: String, params: Payload = mapOf()): Channel {
     val channel = Channel(topic, params, this)
-    this.channels = this.channels.copyAndAdd(channel)
+    this.channels = this.channels + channel
 
     return channel
   }

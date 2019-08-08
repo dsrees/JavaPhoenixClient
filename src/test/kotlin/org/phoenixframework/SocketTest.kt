@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
-import org.phoenixframework.utilities.copyAndRemove
 import java.net.URL
 import java.util.concurrent.TimeUnit
 
@@ -756,8 +755,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels = socket.channels.copyAndRemove(channel)
-      socket.channels = socket.channels.copyAndAdd(spy)
+      socket.channels = socket.channels.minus(channel)
+      socket.channels = socket.channels.plus(spy)
 
       spy.join()
       assertThat(spy.state).isEqualTo(Channel.State.JOINING)
@@ -772,8 +771,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels = socket.channels.copyAndRemove(channel)
-      socket.channels = socket.channels.copyAndAdd(spy)
+      socket.channels = socket.channels.minus(channel)
+      socket.channels = socket.channels.plus(spy)
 
       spy.join().trigger("ok", emptyMap())
 
@@ -789,8 +788,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels = socket.channels.copyAndRemove(channel)
-      socket.channels = socket.channels.copyAndAdd(spy)
+      socket.channels = socket.channels.minus(channel)
+      socket.channels = socket.channels.plus(spy)
 
       spy.join().trigger("ok", emptyMap())
       spy.leave()
@@ -828,8 +827,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels = socket.channels.copyAndRemove(channel)
-      socket.channels = socket.channels.copyAndAdd(spy)
+      socket.channels = socket.channels.minus(channel)
+      socket.channels = socket.channels.plus(spy)
 
       spy.join()
       assertThat(spy.state).isEqualTo(Channel.State.JOINING)
@@ -844,8 +843,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels = socket.channels.copyAndRemove(channel)
-      socket.channels = socket.channels.copyAndAdd(spy)
+      socket.channels = socket.channels.minus(channel)
+      socket.channels = socket.channels.plus(spy)
 
       spy.join().trigger("ok", emptyMap())
 
@@ -861,8 +860,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels = socket.channels.copyAndRemove(channel)
-      socket.channels = socket.channels.copyAndAdd(spy)
+      socket.channels = socket.channels.minus(channel)
+      socket.channels = socket.channels.plus(spy)
 
       spy.join().trigger("ok", emptyMap())
       spy.leave()
@@ -886,8 +885,8 @@ class SocketTest {
       val otherChannel = mock<Channel>()
       whenever(otherChannel.isMember(any())).thenReturn(false)
 
-      socket.channels = socket.channels.copyAndAdd(targetChannel)
-      socket.channels = socket.channels.copyAndRemove(otherChannel)
+      socket.channels = socket.channels.plus(targetChannel)
+      socket.channels = socket.channels.minus(otherChannel)
 
       val rawMessage =
           "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
