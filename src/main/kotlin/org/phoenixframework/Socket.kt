@@ -46,22 +46,22 @@ internal class StateChangeCallbacks {
 
   /** Safely adds an onOpen callback */
   fun onOpen(callback: () -> Unit) {
-    this.open = toMutateAdd(open, callback)
+    this.open = this.open.copyAndAdd(callback)
   }
 
   /** Safely adds an onClose callback */
   fun onClose(callback: () -> Unit) {
-    this.close = toMutateAdd(close, callback)
+    this.close = this.close.copyAndAdd(callback)
   }
 
   /** Safely adds an onError callback */
   fun onError(callback: (Throwable, Response?) -> Unit) {
-    this.error = toMutateAdd(error, callback)
+    this.error = this.error.copyAndAdd(callback)
   }
 
   /** Safely adds an onMessage callback */
   fun onMessage(callback: (Message) -> Unit) {
-    this.message = toMutateAdd(message, callback)
+    this.message = this.message.copyAndAdd(callback)
   }
 
   /** Clears all stored callbacks */
@@ -71,15 +71,16 @@ internal class StateChangeCallbacks {
     error = emptyList()
     message = emptyList()
   }
-
-
-  private fun <T> toMutateAdd(list: List<T>, callback: T): List<T> {
-    val temp = list.toMutableList()
-    temp.add(callback)
-
-    return temp
-  }
 }
+
+/** Converts the List to a MutableList, adds the value, and then returns as a read-only List */
+fun <T> List<T>.copyAndAdd(value: T): List<T> {
+  val temp = this.toMutableList()
+  temp.add(value)
+
+  return temp
+}
+
 
 /** RFC 6455: indicates a normal closure */
 const val WS_CLOSE_NORMAL = 1000
@@ -157,7 +158,7 @@ class Socket(
   internal val stateChangeCallbacks: StateChangeCallbacks = StateChangeCallbacks()
 
   /** Collection of unclosed channels created by the Socket */
-  internal var channels: MutableList<Channel> = ArrayList()
+  internal var channels: List<Channel> = ArrayList()
 
   /** Buffers messages that need to be sent once the socket has connected */
   internal var sendBuffer: MutableList<() -> Unit> = ArrayList()
@@ -303,7 +304,7 @@ class Socket(
 
   fun channel(topic: String, params: Payload = mapOf()): Channel {
     val channel = Channel(topic, params, this)
-    this.channels.add(channel)
+    this.channels.copyAndAdd(channel)
 
     return channel
   }
@@ -314,7 +315,6 @@ class Socket(
     // that does not contain the channel that was removed.
     this.channels = channels
         .filter { it.joinRef != channel.joinRef }
-        .toMutableList()
   }
 
   //------------------------------------------------------------------------------
