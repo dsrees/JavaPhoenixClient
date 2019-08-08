@@ -45,7 +45,7 @@ class Push(
   var timeoutTask: DispatchWorkItem? = null
 
   /** Hooks into a Push. Where .receive("ok", callback(Payload)) are stored */
-  var receiveHooks: MutableMap<String, MutableList<((message: Message) -> Unit)>> = HashMap()
+  var receiveHooks: MutableMap<String, List<((message: Message) -> Unit)>> = HashMap()
 
   /** True if the Push has been sent */
   var sent: Boolean = false
@@ -93,13 +93,9 @@ class Push(
     // If the message has already be received, pass it to the callback
     receivedMessage?.let { if (hasReceived(status)) callback(it) }
 
-    if (receiveHooks[status] == null) {
-      // Create a new array of hooks if no previous hook is associated with status
-      receiveHooks[status] = arrayListOf(callback)
-    } else {
-      // A previous hook for this status already exists. Just append the new hook
-      receiveHooks[status]?.add(callback)
-    }
+    // If a previous hook for this status already exists. Just append the new hook. If not, then
+    // create a new array of hooks if no previous hook is associated with status
+    receiveHooks[status] = receiveHooks[status]?.copyAndAdd(callback) ?: arrayListOf(callback)
 
     return this
   }

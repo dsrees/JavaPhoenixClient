@@ -304,7 +304,7 @@ class Socket(
 
   fun channel(topic: String, params: Payload = mapOf()): Channel {
     val channel = Channel(topic, params, this)
-    this.channels.copyAndAdd(channel)
+    this.channels = this.channels.copyAndAdd(channel)
 
     return channel
   }
