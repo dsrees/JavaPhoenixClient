@@ -33,27 +33,60 @@ import java.util.concurrent.TimeUnit
 typealias Payload = Map<String, Any>
 
 /** Data class that holds callbacks assigned to the socket */
-internal data class StateChangeCallbacks(
-  val open: MutableList<() -> Unit> = ArrayList(),
-  val close: MutableList<() -> Unit> = ArrayList(),
-  val error: MutableList<(Throwable, Response?) -> Unit> = ArrayList(),
-  val message: MutableList<(Message) -> Unit> = ArrayList()
-) {
+internal class StateChangeCallbacks {
+
+  var open: List<() -> Unit> = ArrayList()
+    private set
+  var close: List<() -> Unit> = ArrayList()
+    private set
+  var error: List<(Throwable, Response?) -> Unit> = ArrayList()
+    private set
+  var message: List<(Message) -> Unit> = ArrayList()
+    private set
+
+  /** Safely adds an onOpen callback */
+  fun onOpen(callback: () -> Unit) {
+    this.open = this.open.copyAndAdd(callback)
+  }
+
+  /** Safely adds an onClose callback */
+  fun onClose(callback: () -> Unit) {
+    this.close = this.close.copyAndAdd(callback)
+  }
+
+  /** Safely adds an onError callback */
+  fun onError(callback: (Throwable, Response?) -> Unit) {
+    this.error = this.error.copyAndAdd(callback)
+  }
+
+  /** Safely adds an onMessage callback */
+  fun onMessage(callback: (Message) -> Unit) {
+    this.message = this.message.copyAndAdd(callback)
+  }
+
   /** Clears all stored callbacks */
   fun release() {
-    open.clear()
-    close.clear()
-    error.clear()
-    message.clear()
+    open = emptyList()
+    close = emptyList()
+    error = emptyList()
+    message = emptyList()
   }
 }
+
+/** Converts the List to a MutableList, adds the value, and then returns as a read-only List */
+fun <T> List<T>.copyAndAdd(value: T): List<T> {
+  val temp = this.toMutableList()
+  temp.add(value)
+
+  return temp
+}
+
 
 /** RFC 6455: indicates a normal closure */
 const val WS_CLOSE_NORMAL = 1000
 
 /** RFC 6455: indicates that the connection was closed abnormally */
 const val WS_CLOSE_ABNORMAL = 1006
-
 
 /**
  * Connects to a Phoenix Server
@@ -125,7 +158,7 @@ class Socket(
   internal val stateChangeCallbacks: StateChangeCallbacks = StateChangeCallbacks()
 
   /** Collection of unclosed channels created by the Socket */
-  internal var channels: MutableList<Channel> = ArrayList()
+  internal var channels: List<Channel> = ArrayList()
 
   /** Buffers messages that need to be sent once the socket has connected */
   internal var sendBuffer: MutableList<() -> Unit> = ArrayList()
@@ -250,19 +283,19 @@ class Socket(
   }
 
   fun onOpen(callback: (() -> Unit)) {
-    this.stateChangeCallbacks.open.add(callback)
+    this.stateChangeCallbacks.onOpen(callback)
   }
 
   fun onClose(callback: () -> Unit) {
-    this.stateChangeCallbacks.close.add(callback)
+    this.stateChangeCallbacks.onClose(callback)
   }
 
   fun onError(callback: (Throwable, Response?) -> Unit) {
-    this.stateChangeCallbacks.error.add(callback)
+    this.stateChangeCallbacks.onError(callback)
   }
 
   fun onMessage(callback: (Message) -> Unit) {
-    this.stateChangeCallbacks.message.add(callback)
+    this.stateChangeCallbacks.onMessage(callback)
   }
 
   fun removeAllCallbacks() {
@@ -271,7 +304,7 @@ class Socket(
 
   fun channel(topic: String, params: Payload = mapOf()): Channel {
     val channel = Channel(topic, params, this)
-    this.channels.add(channel)
+    this.channels = this.channels.copyAndAdd(channel)
 
     return channel
   }
@@ -282,7 +315,6 @@ class Socket(
     // that does not contain the channel that was removed.
     this.channels = channels
         .filter { it.joinRef != channel.joinRef }
-        .toMutableList()
   }
 
   //------------------------------------------------------------------------------

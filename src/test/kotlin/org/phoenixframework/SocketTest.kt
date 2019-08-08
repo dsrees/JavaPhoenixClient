@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
+import org.phoenixframework.utilities.copyAndRemove
 import java.net.URL
 import java.util.concurrent.TimeUnit
 
@@ -397,7 +398,6 @@ class SocketTest {
       channel1.join().trigger("ok", emptyMap())
       channel2.join().trigger("ok", emptyMap())
 
-
       var chan1Called = false
       channel1.onError { chan1Called = true }
 
@@ -756,8 +756,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels.remove(channel)
-      socket.channels.add(spy)
+      socket.channels = socket.channels.copyAndRemove(channel)
+      socket.channels = socket.channels.copyAndAdd(spy)
 
       spy.join()
       assertThat(spy.state).isEqualTo(Channel.State.JOINING)
@@ -772,8 +772,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels.remove(channel)
-      socket.channels.add(spy)
+      socket.channels = socket.channels.copyAndRemove(channel)
+      socket.channels = socket.channels.copyAndAdd(spy)
 
       spy.join().trigger("ok", emptyMap())
 
@@ -789,8 +789,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels.remove(channel)
-      socket.channels.add(spy)
+      socket.channels = socket.channels.copyAndRemove(channel)
+      socket.channels = socket.channels.copyAndAdd(spy)
 
       spy.join().trigger("ok", emptyMap())
       spy.leave()
@@ -828,8 +828,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels.remove(channel)
-      socket.channels.add(spy)
+      socket.channels = socket.channels.copyAndRemove(channel)
+      socket.channels = socket.channels.copyAndAdd(spy)
 
       spy.join()
       assertThat(spy.state).isEqualTo(Channel.State.JOINING)
@@ -844,8 +844,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels.remove(channel)
-      socket.channels.add(spy)
+      socket.channels = socket.channels.copyAndRemove(channel)
+      socket.channels = socket.channels.copyAndAdd(spy)
 
       spy.join().trigger("ok", emptyMap())
 
@@ -861,8 +861,8 @@ class SocketTest {
       val spy = spy(channel)
 
       // Use the spy instance instead of the Channel instance
-      socket.channels.remove(channel)
-      socket.channels.add(spy)
+      socket.channels = socket.channels.copyAndRemove(channel)
+      socket.channels = socket.channels.copyAndAdd(spy)
 
       spy.join().trigger("ok", emptyMap())
       spy.leave()
@@ -886,8 +886,8 @@ class SocketTest {
       val otherChannel = mock<Channel>()
       whenever(otherChannel.isMember(any())).thenReturn(false)
 
-      socket.channels.add(targetChannel)
-      socket.channels.add(otherChannel)
+      socket.channels = socket.channels.copyAndAdd(targetChannel)
+      socket.channels = socket.channels.copyAndRemove(otherChannel)
 
       val rawMessage =
           "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
@@ -922,5 +922,98 @@ class SocketTest {
 
     /* End OnConnectionMessage */
   }
+
+
+  @Nested
+  @DisplayName("ConcurrentModificationException")
+  inner class ConcurrentModificationExceptionTests {
+
+    @Test
+    internal fun `onOpen does not throw`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onOpen {
+        socket.onOpen { twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `onClose does not throw`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onClose {
+        socket.onClose { twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionClosed(1000)
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionClosed(1001)
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `onError does not throw`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onError { _, _->
+        socket.onError { _, _ -> twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionError(Throwable(), null)
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionError(Throwable(), null)
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `onMessage does not throw`() {
+      var oneCalled = 0
+      var twoCalled = 0
+      socket.onMessage {
+        socket.onMessage { twoCalled += 1 }
+        oneCalled += 1
+      }
+
+      socket.onConnectionMessage("{\"status\":\"ok\"}")
+      assertThat(oneCalled).isEqualTo(1)
+      assertThat(twoCalled).isEqualTo(0)
+
+      socket.onConnectionMessage("{\"status\":\"ok\"}")
+      assertThat(oneCalled).isEqualTo(2)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+
+    @Test
+    internal fun `does not throw when adding channel`() {
+      var oneCalled = 0
+      socket.onOpen {
+        val channel = socket.channel("foo")
+        oneCalled += 1
+      }
+
+      socket.onConnectionOpened()
+      assertThat(oneCalled).isEqualTo(1)
+    }
+
+    /* End ConcurrentModificationExceptionTests */
+  }
+
 
 }
