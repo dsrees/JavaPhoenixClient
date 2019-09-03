@@ -1,3 +1,5 @@
+## This is the base branch for RxJava support development. This is unreleased, explore at your own risk
+
 # JavaPhoenixClient
 
 [![Download](https://api.bintray.com/packages/drees/java-phoenix-client/JavaPhoenixClient/images/download.svg) ](https://bintray.com/drees/java-phoenix-client/JavaPhoenixClient/_latestVersion)
