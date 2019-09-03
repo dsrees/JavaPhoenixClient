@@ -30,7 +30,7 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 
 /** Alias for a JSON mapping */
-typealias Payload = Map<String, Any>
+typealias Payload = Map<String, Any?>
 
 /** Data class that holds callbacks assigned to the socket */
 internal class StateChangeCallbacks {
