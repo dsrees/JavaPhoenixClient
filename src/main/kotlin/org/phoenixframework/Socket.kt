@@ -84,7 +84,7 @@ const val WS_CLOSE_ABNORMAL = 1006
  */
 class Socket(
   url: String,
-  params: Payload? = null,
+  params: Map<String, Any>? = null,
   private val gson: Gson = Defaults.gson,
   private val client: OkHttpClient = OkHttpClient.Builder().build()
 ) {
