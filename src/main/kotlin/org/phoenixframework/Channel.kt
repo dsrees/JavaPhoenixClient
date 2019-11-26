@@ -293,6 +293,10 @@ class Channel(
     }
   }
 
+  fun off(event: Event, ref: Int? = null) {
+    this.off(event.value, ref)
+  }
+
   fun push(event: String, payload: Payload, timeout: Long = this.timeout): Push {
     if (!joinedOnce) {
       // If the Channel has not been joined, throw an exception
