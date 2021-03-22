@@ -35,33 +35,42 @@ typealias Payload = Map<String, Any?>
 /** Data class that holds callbacks assigned to the socket */
 internal class StateChangeCallbacks {
 
-  var open: List<() -> Unit> = ArrayList()
+  var open: List<Pair<String, () -> Unit>> = ArrayList()
     private set
-  var close: List<() -> Unit> = ArrayList()
+  var close: List<Pair<String, () -> Unit>> = ArrayList()
     private set
-  var error: List<(Throwable, Response?) -> Unit> = ArrayList()
+  var error: List<Pair<String, (Throwable, Response?) -> Unit>> = ArrayList()
     private set
-  var message: List<(Message) -> Unit> = ArrayList()
+  var message: List<Pair<String, (Message) -> Unit>> = ArrayList()
     private set
 
   /** Safely adds an onOpen callback */
-  fun onOpen(callback: () -> Unit) {
-    this.open = this.open + callback
+  fun onOpen(ref: String, callback: () -> Unit) {
+    this.open = this.open + Pair(ref, callback)
   }
 
   /** Safely adds an onClose callback */
-  fun onClose(callback: () -> Unit) {
-    this.close = this.close + callback
+  fun onClose(ref: String, callback: () -> Unit) {
+    this.close = this.close + Pair(ref, callback)
   }
 
   /** Safely adds an onError callback */
-  fun onError(callback: (Throwable, Response?) -> Unit) {
-    this.error = this.error + callback
+  fun onError(ref: String, callback: (Throwable, Response?) -> Unit) {
+    this.error = this.error + Pair(ref, callback)
   }
 
   /** Safely adds an onMessage callback */
-  fun onMessage(callback: (Message) -> Unit) {
-    this.message = this.message + callback
+  fun onMessage(ref: String, callback: (Message) -> Unit) {
+    this.message = this.message + Pair(ref, callback)
+  }
+
+  /** Clears any callbacks with the matching refs */
+  fun release(refs: List<String>) {
+    open = open.filter { refs.contains(it.first) }
+    close = close.filter { refs.contains(it.first) }
+    error = error.filter { refs.contains(it.first) }
+    message = message.filter { refs.contains(it.first) }
+
   }
 
   /** Clears all stored callbacks */
@@ -151,8 +160,11 @@ class Socket(
   /** Collection of unclosed channels created by the Socket */
   internal var channels: List<Channel> = ArrayList()
 
-  /** Buffers messages that need to be sent once the socket has connected */
-  internal var sendBuffer: MutableList<() -> Unit> = ArrayList()
+  /**
+   * Buffers messages that need to be sent once the socket has connected. It is an array of Pairs
+   * that contain the ref of the message to send and the callback that will send the message.
+   */
+  internal var sendBuffer: MutableList<Pair<String?, () -> Unit>> = ArrayList()
 
   /** Ref counter for messages */
   internal var ref: Int = 0
@@ -273,20 +285,20 @@ class Socket(
 
   }
 
-  fun onOpen(callback: (() -> Unit)) {
-    this.stateChangeCallbacks.onOpen(callback)
+  fun onOpen(callback: (() -> Unit)): String {
+    return makeRef().apply { stateChangeCallbacks.onOpen(this, callback) }
   }
 
-  fun onClose(callback: () -> Unit) {
-    this.stateChangeCallbacks.onClose(callback)
+  fun onClose(callback: () -> Unit): String {
+    return makeRef().apply { stateChangeCallbacks.onClose(this, callback) }
   }
 
-  fun onError(callback: (Throwable, Response?) -> Unit) {
-    this.stateChangeCallbacks.onError(callback)
+  fun onError(callback: (Throwable, Response?) -> Unit): String {
+    return makeRef().apply { stateChangeCallbacks.onError(this, callback) }
   }
 
-  fun onMessage(callback: (Message) -> Unit) {
-    this.stateChangeCallbacks.onMessage(callback)
+  fun onMessage(callback: (Message) -> Unit): String {
+    return makeRef().apply { stateChangeCallbacks.onMessage(this, callback) }
   }
 
   fun removeAllCallbacks() {
@@ -301,11 +313,22 @@ class Socket(
   }
 
   fun remove(channel: Channel) {
+    this.off(channel.stateChangeRefs)
+
     // To avoid a ConcurrentModificationException, filter out the channels to be
     // removed instead of calling .remove() on the list, thus returning a new list
     // that does not contain the channel that was removed.
     this.channels = channels
         .filter { it.joinRef != channel.joinRef }
+  }
+
+  /**
+   * Removes [onOpen], [onClose], [onError], and [onMessage] registrations by their [ref] value.
+   *
+   * @param refs List of refs to remove
+   */
+  fun off(refs: List<String>) {
+    this.stateChangeCallbacks.release(refs)
   }
 
   //------------------------------------------------------------------------------
@@ -341,7 +364,7 @@ class Socket(
     } else {
       // If the socket is not connected, add the push to a buffer which will
       // be sent immediately upon connection.
-      sendBuffer.add(callback)
+      sendBuffer.add(Pair(ref, callback))
     }
   }
 
@@ -374,7 +397,7 @@ class Socket(
 
     // Since the connections onClose was null'd out, inform all state callbacks
     // that the Socket has closed
-    this.stateChangeCallbacks.close.forEach { it.invoke() }
+    this.stateChangeCallbacks.close.forEach { it.second.invoke() }
     callback?.invoke()
   }
 
@@ -391,9 +414,25 @@ class Socket(
   /** Send all messages that were buffered before the socket opened */
   internal fun flushSendBuffer() {
     if (isConnected && sendBuffer.isNotEmpty()) {
-      this.sendBuffer.forEach { it.invoke() }
+      this.sendBuffer.forEach { it.second.invoke() }
       this.sendBuffer.clear()
     }
+  }
+
+  /** Removes an item from the send buffer with the matching ref */
+  internal fun removeFromSendBuffer(ref: String) {
+    this.sendBuffer = this.sendBuffer
+      .filter { it.first != ref }
+      .toMutableList()
+  }
+
+  internal fun leaveOpenTopic(topic: String) {
+    this.channels
+      .firstOrNull { it.topic == topic && (it.isJoined || it.isJoining) }
+      ?.let {
+        logItems("Transport: Leaving duplicate topic: [$topic]")
+        it.leave()
+      }
   }
 
   //------------------------------------------------------------------------------
@@ -469,7 +508,7 @@ class Socket(
     this.resetHeartbeat()
 
     // Inform all onOpen callbacks that the Socket has opened
-    this.stateChangeCallbacks.open.forEach { it.invoke() }
+    this.stateChangeCallbacks.open.forEach { it.second.invoke() }
   }
 
   internal fun onConnectionClosed(code: Int) {
@@ -486,7 +525,7 @@ class Socket(
     }
 
     // Inform callbacks the socket closed
-    this.stateChangeCallbacks.close.forEach { it.invoke() }
+    this.stateChangeCallbacks.close.forEach { it.second.invoke() }
   }
 
   internal fun onConnectionMessage(rawMessage: String) {
@@ -504,7 +543,7 @@ class Socket(
         .forEach { it.trigger(message) }
 
     // Inform all onMessage callbacks of the message
-    this.stateChangeCallbacks.message.forEach { it.invoke(message) }
+    this.stateChangeCallbacks.message.forEach { it.second.invoke(message) }
   }
 
   internal fun onConnectionError(t: Throwable, response: Response?) {
@@ -514,7 +553,7 @@ class Socket(
     this.triggerChannelError()
 
     // Inform any state callbacks of the error
-    this.stateChangeCallbacks.error.forEach { it.invoke(t, response) }
+    this.stateChangeCallbacks.error.forEach { it.second.invoke(t, response) }
   }
 
 }
