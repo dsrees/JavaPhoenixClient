@@ -46,6 +46,15 @@ test {
 
 }
 
+
+signing {
+  def signingKeyId = findProperty("signingKeyId")
+  def signingKey = findProperty("signingKey")
+  def signingPassword = findProperty("signingPassword")
+  useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+}
+
+
 dependencies {
   compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
   compile "com.google.code.gson:gson:2.8.5"
