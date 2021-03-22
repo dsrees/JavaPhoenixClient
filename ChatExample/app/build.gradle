@@ -29,15 +29,15 @@ android {
 
 dependencies {
     /*
-        To update the JavaPhoenixClient, either use the latest dependency from jcenter
+        To update the JavaPhoenixClient, either use the latest dependency from mavenCentral()
         OR run
             `./gradlew jar`
         and copy
             `/build/lib/*.jar` to `/ChatExample/app/libs`
-        and comment out the jcenter dependency
+        and comment out the mavenCentral() dependency
      */
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-//    implementation 'com.github.dsrees:JavaPhoenixClient:0.2.3'
+//    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.github.dsrees:JavaPhoenixClient:0.3.4'
 
 
     implementation "com.google.code.gson:gson:2.8.5"

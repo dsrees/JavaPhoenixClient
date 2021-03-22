@@ -55,18 +55,18 @@ val socket = Socket("http://localhost:4000/socket/websocket",
 
 ### Installation
 
-JavaPhoenixClient is hosted on JCenter. You'll need to make sure you declare `jcenter()` as one of your repositories
+JavaPhoenixClient is hosted on MavenCentral. You'll need to make sure you declare `mavenCentral()` as one of your repositories
 
 ```
 repositories {
-    jcenter()
+    mavenCentral()
 }
 ```
 
 and then add the library. See [releases](https://github.com/dsrees/JavaPhoenixClient/releases) for the latest version
 ```$xslt
 dependencies {
-    implementation 'com.github.dsrees:JavaPhoenixClient:0.3.4'
+    implementation 'com.github.dsrees:JavaPhoenixClient:0.4.0'
 }
 ```
 
