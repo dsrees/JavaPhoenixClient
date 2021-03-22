@@ -193,7 +193,7 @@ class ChannelTest {
     @Test
     internal fun `triggers socket push with channel params`() {
       channel.join()
-      verify(socket).push("topic", "phx_join", kDefaultPayload, kDefaultRef, channel.joinRef)
+      verify(socket).push("topic", "phx_join", kDefaultPayload, "3", channel.joinRef)
     }
 
     @Test
@@ -204,6 +204,22 @@ class ChannelTest {
       assertThat(joinPush.timeout).isEqualTo(kDefaultTimeout)
       channel.join(newTimeout)
       assertThat(joinPush.timeout).isEqualTo(newTimeout)
+    }
+
+    @Test
+    internal fun `leaves existing duplicate topic on new join`() {
+      val socket = spy(Socket("wss://localhost:4000/socket"))
+      val channel = socket.channel("topic")
+
+      channel.join().receive("ok") {
+        val newChannel = socket.channel("topic")
+        assertThat(channel.isJoined).isTrue()
+        newChannel.join()
+
+        assertThat(channel.isJoined).isFalse()
+      }
+
+      channel.joinPush.trigger("ok", kEmptyPayload)
     }
 
     @Nested
@@ -429,11 +445,11 @@ class ChannelTest {
 
       @Test
       internal fun `removes channel binding`() {
-        var bindings = channel.getBindings("chan_reply_1")
+        var bindings = channel.getBindings("chan_reply_3")
         assertThat(bindings).hasSize(1)
 
         receivesOk()
-        bindings = channel.getBindings("chan_reply_1")
+        bindings = channel.getBindings("chan_reply_3")
         assertThat(bindings).isEmpty()
       }
 
@@ -583,7 +599,7 @@ class ChannelTest {
 
       @Test
       internal fun `removes channel binding`() {
-        var bindings = channel.getBindings("chan_reply_1")
+        var bindings = channel.getBindings("chan_reply_3")
         assertThat(bindings).hasSize(1)
 
         receivesError()
@@ -656,10 +672,23 @@ class ChannelTest {
       fakeClock.tick(1000)
       verify(joinPush, times(1)).send()
 
-      channel.trigger("error")
+      channel.trigger(Channel.Event.ERROR)
 
       fakeClock.tick(1000)
       verify(joinPush, times(1)).send()
+    }
+
+    @Test
+    internal fun `removes the joinPush message from sendBuffer`() {
+      val channel = Channel("topic", kDefaultPayload, socket)
+      val push = mock<Push>()
+      whenever(push.ref).thenReturn("10")
+      channel.joinPush = push
+      channel.state = Channel.State.JOINING
+
+      channel.trigger(Channel.Event.ERROR)
+      verify(socket).removeFromSendBuffer("10")
+      verify(push).reset()
     }
 
     @Test

@@ -112,6 +112,9 @@ class Channel(
   /** Timer to attempt rejoins */
   internal var rejoinTimer: TimeoutTimer
 
+  /** Refs if stateChange hooks */
+  internal var stateChangeRefs: MutableList<String>
+
   /**
    * Optional onMessage hook that can be provided. Receives all event messages for specialized
    * handling before dispatching to the Channel event callbacks.
@@ -125,6 +128,7 @@ class Channel(
     this.timeout = socket.timeout
     this.joinedOnce = false
     this.pushBuffer = mutableListOf()
+    this.stateChangeRefs = mutableListOf()
     this.rejoinTimer = TimeoutTimer(
         dispatchQueue = socket.dispatchQueue,
         timerCalculation = socket.rejoinAfterMs,
@@ -133,10 +137,11 @@ class Channel(
 
     // Respond to socket events
     this.socket.onError { _, _-> this.rejoinTimer.reset() }
+      .apply { stateChangeRefs.add(this) }
     this.socket.onOpen {
       this.rejoinTimer.reset()
       if (this.isErrored) { this.rejoin() }
-    }
+    }.apply { stateChangeRefs.add(this) }
 
 
     // Setup Push to be sent when joining
@@ -203,7 +208,14 @@ class Channel(
       this.socket.logItems("Channel: error $topic ${it.payload}")
 
       // If error was received while joining, then reset the Push
-      if (isJoining) { this.joinPush.reset() }
+      if (isJoining) {
+        // Make sure that the "phx_join" isn't buffered to send once the socket
+        // reconnects. The channel will send a new join event when the socket connects.
+        this.joinRef?.let { this.socket.removeFromSendBuffer(it) }
+
+        // Reset the push to be used again later
+        this.joinPush.reset()
+      }
 
       // Mark the channel as errored and attempt to rejoin if socket is currently connected
       this.state = State.ERRORED
@@ -413,6 +425,9 @@ class Channel(
   private fun rejoin(timeout: Long = this.timeout) {
     // Do not attempt to rejoin if the channel is in the process of leaving
     if (isLeaving) return
+
+    // Leave potentially duplicated channels
+    this.socket.leaveOpenTopic(this.topic)
 
     // Send the joinPush
     this.sendJoin(timeout)

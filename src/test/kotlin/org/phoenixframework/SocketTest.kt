@@ -462,7 +462,7 @@ class SocketTest {
       verify(connection, never()).send(any())
       assertThat(socket.sendBuffer).hasSize(2)
 
-      socket.sendBuffer.forEach { it.invoke() }
+      socket.sendBuffer.forEach { it.second.invoke() }
       verify(connection, times(2)).send(any())
     }
 
@@ -540,9 +540,9 @@ class SocketTest {
     @Test
     internal fun `invokes callbacks in buffer when connected`() {
       var oneCalled = 0
-      socket.sendBuffer.add { oneCalled += 1 }
+      socket.sendBuffer.add(Pair("0", { oneCalled += 1 }))
       var twoCalled = 0
-      socket.sendBuffer.add { twoCalled += 1 }
+      socket.sendBuffer.add(Pair("1", { twoCalled += 1 }))
       val threeCalled = 0
 
       whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
@@ -563,7 +563,7 @@ class SocketTest {
 
     @Test
     internal fun `empties send buffer`() {
-      socket.sendBuffer.add { }
+      socket.sendBuffer.add(Pair(null, {}))
 
       whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
       socket.connect()
@@ -576,6 +576,31 @@ class SocketTest {
 
     /* End FlushSendBuffer */
   }
+
+  @Nested
+  @DisplayName("removeFromSendBuffer")
+  inner class RemoveFromSendBuffer {
+    @Test
+    internal fun `removes a callback with matching ref`() {
+      var oneCalled = 0
+      socket.sendBuffer.add(Pair("0", { oneCalled += 1 }))
+      var twoCalled = 0
+      socket.sendBuffer.add(Pair("1", { twoCalled += 1 }))
+
+      whenever(connection.readyState).thenReturn(Transport.ReadyState.OPEN)
+
+      // connect
+      socket.connect()
+
+      socket.removeFromSendBuffer("0")
+
+      // sends once connected
+      socket.flushSendBuffer()
+      assertThat(oneCalled).isEqualTo(0)
+      assertThat(twoCalled).isEqualTo(1)
+    }
+  }
+
 
   @Nested
   @DisplayName("resetHeartbeat")
@@ -638,7 +663,7 @@ class SocketTest {
     @Test
     internal fun `flushes the send buffer`() {
       var oneCalled = 0
-      socket.sendBuffer.add { oneCalled += 1 }
+      socket.sendBuffer.add(Pair("1", { oneCalled += 1 }))
 
       socket.onConnectionOpened()
       assertThat(oneCalled).isEqualTo(1)
