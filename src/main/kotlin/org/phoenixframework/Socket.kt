@@ -66,11 +66,10 @@ internal class StateChangeCallbacks {
 
   /** Clears any callbacks with the matching refs */
   fun release(refs: List<String>) {
-    open = open.filter { refs.contains(it.first) }
-    close = close.filter { refs.contains(it.first) }
-    error = error.filter { refs.contains(it.first) }
-    message = message.filter { refs.contains(it.first) }
-
+    open = open.filterNot { refs.contains(it.first) }
+    close = close.filterNot { refs.contains(it.first) }
+    error = error.filterNot { refs.contains(it.first) }
+    message = message.filterNot { refs.contains(it.first) }
   }
 
   /** Clears all stored callbacks */

@@ -424,6 +424,29 @@ class SocketTest {
   }
 
   @Nested
+  @DisplayName("release")
+  inner class Release {
+    @Test
+    internal fun `Clears any callbacks with the matching refs`() {
+      socket.stateChangeCallbacks.onOpen("1") {}
+      socket.stateChangeCallbacks.onOpen("2") {}
+      socket.stateChangeCallbacks.onClose("1") {}
+      socket.stateChangeCallbacks.onClose("2") {}
+      socket.stateChangeCallbacks.onError("1") { _: Throwable, _: Response? -> }
+      socket.stateChangeCallbacks.onError("2") { _: Throwable, _: Response? -> }
+      socket.stateChangeCallbacks.onMessage("1") { }
+      socket.stateChangeCallbacks.onMessage("2") { }
+
+      socket.stateChangeCallbacks.release(listOf("1"))
+
+      assertThat(socket.stateChangeCallbacks.open).doesNotContain("1")
+      assertThat(socket.stateChangeCallbacks.close).doesNotContain("1")
+      assertThat(socket.stateChangeCallbacks.error).doesNotContain("1")
+      assertThat(socket.stateChangeCallbacks.message).doesNotContain("1")
+    }
+  }
+
+  @Nested
   @DisplayName("push")
   inner class Push {
     @Test
