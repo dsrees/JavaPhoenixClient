@@ -25,6 +25,8 @@ package org.phoenixframework
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import okhttp3.HttpUrl
+import java.net.URL
 
 object Defaults {
 
@@ -36,7 +38,9 @@ object Defaults {
 
   /** Default reconnect algorithm for the socket */
   val reconnectSteppedBackOff: (Int) -> Long = { tries ->
-    if (tries > 9) 5_000 else listOf(10L, 50L, 100L, 150L, 200L, 250L, 500L, 1_000L, 2_000L)[tries - 1]
+    if (tries > 9) 5_000 else listOf(
+      10L, 50L, 100L, 150L, 200L, 250L, 500L, 1_000L, 2_000L
+    )[tries - 1]
   }
 
   /** Default rejoin algorithm for individual channels */
@@ -44,11 +48,46 @@ object Defaults {
     if (tries > 3) 10_000 else listOf(1_000L, 2_000L, 5_000L)[tries - 1]
   }
 
-
   /** The default Gson configuration to use when parsing messages */
   val gson: Gson
     get() = GsonBuilder()
-        .setLenient()
-        .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
-        .create()
+      .setLenient()
+      .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+      .create()
+
+  /**
+   * Takes an endpoint and a params closure given by the User and constructs a URL that
+   * is ready to be sent to the Socket connection.
+   *
+   * Will convert "ws://" and "wss://" to http/s which is what OkHttp expects.
+   *
+   * @throws IllegalArgumentException if [endpoint] is not a valid URL endpoint.
+   */
+  internal fun buildEndpointUrl(
+    endpoint: String,
+    paramsClosure: PayloadClosure
+  ): URL {
+    var mutableUrl = endpoint
+    // Silently replace web socket URLs with HTTP URLs.
+    if (endpoint.regionMatches(0, "ws:", 0, 3, ignoreCase = true)) {
+      mutableUrl = "http:" + endpoint.substring(3)
+    } else if (endpoint.regionMatches(0, "wss:", 0, 4, ignoreCase = true)) {
+      mutableUrl = "https:" + endpoint.substring(4)
+    }
+
+    // If there are query params, append them now
+    var httpUrl =
+      HttpUrl.parse(mutableUrl) ?: throw IllegalArgumentException("invalid url: $endpoint")
+    paramsClosure.invoke()?.let {
+      val httpBuilder = httpUrl.newBuilder()
+      it.forEach { (key, value) ->
+        httpBuilder.addQueryParameter(key, value.toString())
+      }
+
+      httpUrl = httpBuilder.build()
+    }
+
+    // Store the URL that will be used to establish a connection
+    return httpUrl.url()
+  }
 }

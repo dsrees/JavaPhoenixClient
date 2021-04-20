@@ -155,7 +155,7 @@ class ChannelTest {
 
     @BeforeEach
     internal fun setUp() {
-      socket = spy(Socket(url ="https://localhost:4000/socket", client = okHttpClient))
+      socket = spy(Socket(url = "https://localhost:4000/socket", client = okHttpClient))
       socket.dispatchQueue = fakeClock
       channel = Channel("topic", kDefaultPayload, socket)
     }

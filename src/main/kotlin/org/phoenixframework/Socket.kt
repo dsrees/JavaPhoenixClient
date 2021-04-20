@@ -45,22 +45,34 @@ internal class StateChangeCallbacks {
     private set
 
   /** Safely adds an onOpen callback */
-  fun onOpen(ref: String, callback: () -> Unit) {
+  fun onOpen(
+    ref: String,
+    callback: () -> Unit
+  ) {
     this.open = this.open + Pair(ref, callback)
   }
 
   /** Safely adds an onClose callback */
-  fun onClose(ref: String, callback: () -> Unit) {
+  fun onClose(
+    ref: String,
+    callback: () -> Unit
+  ) {
     this.close = this.close + Pair(ref, callback)
   }
 
   /** Safely adds an onError callback */
-  fun onError(ref: String, callback: (Throwable, Response?) -> Unit) {
+  fun onError(
+    ref: String,
+    callback: (Throwable, Response?) -> Unit
+  ) {
     this.error = this.error + Pair(ref, callback)
   }
 
   /** Safely adds an onMessage callback */
-  fun onMessage(ref: String, callback: (Message) -> Unit) {
+  fun onMessage(
+    ref: String,
+    callback: (Message) -> Unit
+  ) {
     this.message = this.message + Pair(ref, callback)
   }
 
@@ -88,11 +100,30 @@ const val WS_CLOSE_NORMAL = 1000
 const val WS_CLOSE_ABNORMAL = 1006
 
 /**
+ * A closure that will return an optional Payload
+ */
+typealias PayloadClosure = () -> Payload?
+
+/**
  * Connects to a Phoenix Server
+ */
+
+/**
+ * A [Socket] which connects to a Phoenix Server. Takes a closure to allow for changing parameters
+ * to be sent to the server when connecting.
+ *
+ * ## Example
+ * ```
+ * val socket = Socket("https://example.com/socket", { mapOf("token" to mAuthToken) })
+ * ```
+ * @param url Url to connect to such as https://example.com/socket
+ * @param paramsClosure Closure which allows to change parameters sent during connection.
+ * @param gson Default GSON Client to parse JSON. You can provide your own if needed.
+ * @param client Default OkHttpClient to connect with. You can provide your own if needed.
  */
 class Socket(
   url: String,
-  params: Payload? = null,
+  val paramsClosure: PayloadClosure,
   private val gson: Gson = Defaults.gson,
   private val client: OkHttpClient = OkHttpClient.Builder().build()
 ) {
@@ -109,13 +140,8 @@ class Socket(
   val endpoint: String
 
   /** The fully qualified socket URL */
-  val endpointUrl: URL
-
-  /**
-   * The optional params to pass when connecting. Must be set when
-   * initializing the Socket. These will be appended to the URL.
-   */
-  val params: Payload? = params
+  var endpointUrl: URL
+    private set
 
   /** Timeout to use when opening a connection */
   var timeout: Long = Defaults.TIMEOUT
@@ -189,6 +215,27 @@ class Socket(
   //------------------------------------------------------------------------------
   // Initialization
   //------------------------------------------------------------------------------
+  /**
+   * A [Socket] which connects to a Phoenix Server. Takes a constant parameter to be sent to the
+   * server when connecting. Defaults to null if excluded.
+   *
+   * ## Example
+   * ```
+   * val socket = Socket("https://example.com/socket", mapOf("token" to mAuthToken))
+   * ```
+   *
+   * @param url Url to connect to such as https://example.com/socket
+   * @param params Constant parameters to send when connecting. Defaults to null
+   * @param gson Default GSON Client to parse JSON. You can provide your own if needed.
+   * @param client Default OkHttpClient to connect with. You can provide your own if needed.
+   */
+  constructor(
+    url: String,
+    params: Payload? = null,
+    gson: Gson = Defaults.gson,
+    client: OkHttpClient = OkHttpClient.Builder().build()
+  ) : this(url, { params }, gson, client)
+
   init {
     var mutableUrl = url
 
@@ -206,35 +253,18 @@ class Socket(
     // Store the endpoint before changing the protocol
     this.endpoint = mutableUrl
 
-    // Silently replace web socket URLs with HTTP URLs.
-    if (url.regionMatches(0, "ws:", 0, 3, ignoreCase = true)) {
-      mutableUrl = "http:" + url.substring(3)
-    } else if (url.regionMatches(0, "wss:", 0, 4, ignoreCase = true)) {
-      mutableUrl = "https:" + url.substring(4)
-    }
-
-    // If there are query params, append them now
-    var httpUrl = HttpUrl.parse(mutableUrl) ?: throw IllegalArgumentException("invalid url: $url")
-    params?.let {
-      val httpBuilder = httpUrl.newBuilder()
-      it.forEach { (key, value) ->
-        httpBuilder.addQueryParameter(key, value.toString())
-      }
-
-      httpUrl = httpBuilder.build()
-    }
-
-    // Store the URL that will be used to establish a connection
-    this.endpointUrl = httpUrl.url()
+    // Store the URL that will be used to establish a connection. Could potentially be
+    // different at the time connect() is called based on a changing params closure.
+    this.endpointUrl = Defaults.buildEndpointUrl(this.endpoint, this.paramsClosure)
 
     // Create reconnect timer
     this.reconnectTimer = TimeoutTimer(
-        dispatchQueue = dispatchQueue,
-        timerCalculation = reconnectAfterMs,
-        callback = {
-          this.logItems("Socket attempting to reconnect")
-          this.teardown { this.connect() }
-        })
+      dispatchQueue = dispatchQueue,
+      timerCalculation = reconnectAfterMs,
+      callback = {
+        this.logItems("Socket attempting to reconnect")
+        this.teardown { this.connect() }
+      })
   }
 
   //------------------------------------------------------------------------------
@@ -262,6 +292,11 @@ class Socket(
     // Reset the clean close flag when attempting to connect
     this.closeWasClean = false
 
+    // Build the new endpointUrl with the params closure. The payload returned
+    // from the closure could be different such as a changing authToken.
+    this.endpointUrl = Defaults.buildEndpointUrl(this.endpoint, this.paramsClosure)
+
+    // Now create the connection transport and attempt to connect
     this.connection = this.transport(endpointUrl)
     this.connection?.onOpen = { onConnectionOpened() }
     this.connection?.onClose = { code -> onConnectionClosed(code) }
@@ -281,7 +316,6 @@ class Socket(
     // Reset any reconnects and teardown the socket connection
     this.reconnectTimer.reset()
     this.teardown(code, reason, callback)
-
   }
 
   fun onOpen(callback: (() -> Unit)): String {
@@ -304,7 +338,10 @@ class Socket(
     this.stateChangeCallbacks.release()
   }
 
-  fun channel(topic: String, params: Payload = mapOf()): Channel {
+  fun channel(
+    topic: String,
+    params: Payload = mapOf()
+  ): Channel {
     val channel = Channel(topic, params, this)
     this.channels = this.channels + channel
 
@@ -318,7 +355,7 @@ class Socket(
     // removed instead of calling .remove() on the list, thus returning a new list
     // that does not contain the channel that was removed.
     this.channels = channels
-        .filter { it.joinRef != channel.joinRef }
+      .filter { it.joinRef != channel.joinRef }
   }
 
   /**
@@ -449,7 +486,7 @@ class Socket(
     val period = heartbeatIntervalMs
 
     heartbeatTask =
-        dispatchQueue.queueAtFixedRate(delay, period, TimeUnit.MILLISECONDS) { sendHeartbeat() }
+      dispatchQueue.queueAtFixedRate(delay, period, TimeUnit.MILLISECONDS) { sendHeartbeat() }
   }
 
   internal fun sendHeartbeat() {
@@ -471,10 +508,11 @@ class Socket(
     // The last heartbeat was acknowledged by the server. Send another one
     this.pendingHeartbeatRef = this.makeRef()
     this.push(
-        topic = "phoenix",
-        event = Channel.Event.HEARTBEAT.value,
-        payload = mapOf(),
-        ref = pendingHeartbeatRef)
+      topic = "phoenix",
+      event = Channel.Event.HEARTBEAT.value,
+      payload = mapOf(),
+      ref = pendingHeartbeatRef
+    )
   }
 
   private fun abnormalClose(reason: String) {
@@ -538,14 +576,17 @@ class Socket(
 
     // Dispatch the message to all channels that belong to the topic
     this.channels
-        .filter { it.isMember(message) }
-        .forEach { it.trigger(message) }
+      .filter { it.isMember(message) }
+      .forEach { it.trigger(message) }
 
     // Inform all onMessage callbacks of the message
     this.stateChangeCallbacks.message.forEach { it.second.invoke(message) }
   }
 
-  internal fun onConnectionError(t: Throwable, response: Response?) {
+  internal fun onConnectionError(
+    t: Throwable,
+    response: Response?
+  ) {
     this.logItems("Transport: error $t")
 
     // Send an error to all channels
@@ -554,5 +595,4 @@ class Socket(
     // Inform any state callbacks of the error
     this.stateChangeCallbacks.error.forEach { it.second.invoke(t, response) }
   }
-
 }
