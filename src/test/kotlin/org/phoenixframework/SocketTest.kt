@@ -48,7 +48,7 @@ class SocketTest {
     internal fun `sets defaults`() {
       val socket = Socket("wss://localhost:4000/socket")
 
-      assertThat(socket.params).isNull()
+      assertThat(socket.paramsClosure.invoke()).isNull()
       assertThat(socket.channels).isEmpty()
       assertThat(socket.sendBuffer).isEmpty()
       assertThat(socket.ref).isEqualTo(0)
@@ -81,7 +81,7 @@ class SocketTest {
       socket.logger = { }
       socket.reconnectAfterMs = { 10 }
 
-      assertThat(socket.params).isEqualTo(mapOf("one" to 2))
+      assertThat(socket.paramsClosure?.invoke()).isEqualTo(mapOf("one" to 2))
       assertThat(socket.endpoint).isEqualTo("wss://localhost:4000/socket/websocket")
       assertThat(socket.timeout).isEqualTo(40_000)
       assertThat(socket.heartbeatIntervalMs).isEqualTo(60_000)
@@ -94,32 +94,34 @@ class SocketTest {
     internal fun `constructs with a valid URL`() {
       // Test different schemes
       assertThat(Socket("http://localhost:4000/socket/websocket").endpointUrl.toString())
-          .isEqualTo("http://localhost:4000/socket/websocket")
+        .isEqualTo("http://localhost:4000/socket/websocket")
 
       assertThat(Socket("https://localhost:4000/socket/websocket").endpointUrl.toString())
-          .isEqualTo("https://localhost:4000/socket/websocket")
+        .isEqualTo("https://localhost:4000/socket/websocket")
 
       assertThat(Socket("ws://localhost:4000/socket/websocket").endpointUrl.toString())
-          .isEqualTo("http://localhost:4000/socket/websocket")
+        .isEqualTo("http://localhost:4000/socket/websocket")
 
       assertThat(Socket("wss://localhost:4000/socket/websocket").endpointUrl.toString())
-          .isEqualTo("https://localhost:4000/socket/websocket")
+        .isEqualTo("https://localhost:4000/socket/websocket")
 
       // test params
       val singleParam = hashMapOf("token" to "abc123")
       assertThat(Socket("ws://localhost:4000/socket/websocket", singleParam).endpointUrl.toString())
-          .isEqualTo("http://localhost:4000/socket/websocket?token=abc123")
+        .isEqualTo("http://localhost:4000/socket/websocket?token=abc123")
 
       val multipleParams = hashMapOf("token" to "abc123", "user_id" to 1)
       assertThat(
-          Socket("http://localhost:4000/socket/websocket", multipleParams).endpointUrl.toString())
-          .isEqualTo("http://localhost:4000/socket/websocket?user_id=1&token=abc123")
+        Socket("http://localhost:4000/socket/websocket", multipleParams).endpointUrl.toString()
+      )
+        .isEqualTo("http://localhost:4000/socket/websocket?user_id=1&token=abc123")
 
       // test params with spaces
       val spacesParams = hashMapOf("token" to "abc 123", "user_id" to 1)
       assertThat(
-          Socket("wss://localhost:4000/socket/websocket", spacesParams).endpointUrl.toString())
-          .isEqualTo("https://localhost:4000/socket/websocket?user_id=1&token=abc%20123")
+        Socket("wss://localhost:4000/socket/websocket", spacesParams).endpointUrl.toString()
+      )
+        .isEqualTo("https://localhost:4000/socket/websocket?user_id=1&token=abc%20123")
     }
 
     /* End Constructor */
@@ -186,6 +188,28 @@ class SocketTest {
     }
 
     @Test
+    internal fun `accounts for changing parameters`() {
+      val transport = mock<(URL) -> Transport>()
+      whenever(transport.invoke(any())).thenReturn(connection)
+
+      var token = "a"
+      val socket = Socket("wss://localhost:4000/socket", { mapOf("token" to token) })
+      socket.transport = transport
+
+      socket.connect()
+      argumentCaptor<URL> {
+        verify(transport).invoke(capture())
+        assertThat(firstValue.query).isEqualTo("token=a")
+
+        token = "b"
+        socket.disconnect()
+        socket.connect()
+        verify(transport, times(2)).invoke(capture())
+        assertThat(lastValue.query).isEqualTo("token=b")
+      }
+    }
+
+    @Test
     internal fun `sets callbacks for connection`() {
       var open = 0
       socket.onOpen { open += 1 }
@@ -216,10 +240,10 @@ class SocketTest {
       assertThat(lastResponse).isNull()
 
       val data = mapOf(
-          "topic" to "topic",
-          "event" to "event",
-          "payload" to mapOf("go" to true),
-          "status" to "status"
+        "topic" to "topic",
+        "event" to "event",
+        "payload" to mapOf("go" to true),
+        "status" to "status"
       )
 
       val json = Defaults.gson.toJson(data)
@@ -259,10 +283,10 @@ class SocketTest {
       assertThat(lastResponse).isNull()
 
       val data = mapOf(
-          "topic" to "topic",
-          "event" to "event",
-          "payload" to mapOf("go" to true),
-          "status" to "status"
+        "topic" to "topic",
+        "event" to "event",
+        "payload" to mapOf("go" to true),
+        "status" to "status"
       )
 
       val json = Defaults.gson.toJson(data)
@@ -457,7 +481,7 @@ class SocketTest {
       socket.push("topic", "event", mapOf("one" to "two"), "ref", "join-ref")
 
       val expect =
-          "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"ref\",\"join_ref\":\"join-ref\"}"
+        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"ref\",\"join_ref\":\"join-ref\"}"
       verify(connection).send(expect)
     }
 
@@ -624,7 +648,6 @@ class SocketTest {
     }
   }
 
-
   @Nested
   @DisplayName("resetHeartbeat")
   inner class ResetHeartbeat {
@@ -658,14 +681,16 @@ class SocketTest {
 
       assertThat(socket.heartbeatTask).isNotNull()
       argumentCaptor<() -> Unit> {
-        verify(mockDispatchQueue).queueAtFixedRate(eq(5_000L), eq(5_000L),
-            eq(TimeUnit.MILLISECONDS), capture())
+        verify(mockDispatchQueue).queueAtFixedRate(
+          eq(5_000L), eq(5_000L),
+          eq(TimeUnit.MILLISECONDS), capture()
+        )
 
         // fire the task
         allValues.first().invoke()
 
         val expected =
-            "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
+          "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
         verify(connection).send(expected)
       }
     }
@@ -937,7 +962,7 @@ class SocketTest {
       socket.channels = socket.channels.minus(otherChannel)
 
       val rawMessage =
-          "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
+        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
       socket.onConnectionMessage(rawMessage)
 
       verify(targetChannel).trigger(message = any())
@@ -950,7 +975,7 @@ class SocketTest {
       socket.onMessage { message = it }
 
       val rawMessage =
-          "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
+        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
       socket.onConnectionMessage(rawMessage)
 
       assertThat(message?.topic).isEqualTo("topic")
@@ -962,14 +987,13 @@ class SocketTest {
       socket.pendingHeartbeatRef = "5"
 
       val rawMessage =
-          "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"5\"}"
+        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"5\"}"
       socket.onConnectionMessage(rawMessage)
       assertThat(socket.pendingHeartbeatRef).isNull()
     }
 
     /* End OnConnectionMessage */
   }
-
 
   @Nested
   @DisplayName("ConcurrentModificationException")
@@ -1015,7 +1039,7 @@ class SocketTest {
     internal fun `onError does not throw`() {
       var oneCalled = 0
       var twoCalled = 0
-      socket.onError { _, _->
+      socket.onError { _, _ ->
         socket.onError { _, _ -> twoCalled += 1 }
         oneCalled += 1
       }
@@ -1061,6 +1085,4 @@ class SocketTest {
 
     /* End ConcurrentModificationExceptionTests */
   }
-
-
 }
