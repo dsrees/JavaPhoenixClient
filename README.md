@@ -58,12 +58,8 @@ socket.connect() // or internal reconnect logic kicks in
 ```
 
 
-You can also inject your own OkHttp Client and GSON into the Socket to provide your own configuration
+You can also inject your own OkHttp Client into the Socket to provide your own configuration
 ```kotlin
-
-// Configure your own GSON instance
-val gson = Gson.Builder().create()
-
 // Configure your own OkHttp Client
 val client = OkHttpClient.Builder()
     .connectTimeout(1000, TimeUnit.MILLISECONDS)
@@ -72,10 +68,33 @@ val client = OkHttpClient.Builder()
 // Create Socket with your custom instances
 val params = hashMapOf("token" to "abc123")
 val socket = Socket("http://localhost:4000/socket/websocket",
-                     params,
-                     gson,
-                     client)
+    params,
+    client)
 ```
+
+By default, the client use GSON to encode and decode JSON. If you prefer to manage this yourself, you
+can provide custom encode/decode functions in the `Socket` constructor.
+
+```kotlin
+
+// Configure your own GSON instance
+val gson = Gson.Builder().create()
+val encoder: EncodeClosure = {
+    // Encode a Map into JSON using your custom GSON instance or another JSON library
+    // of your choice (Moshi, etc)
+}
+val decoder: DecodeClosure = {
+    // Decode a JSON String into a `Message` object using your custom JSON library 
+}
+
+// Create Socket with your custom instances
+val params = hashMapOf("token" to "abc123")
+val socket = Socket("http://localhost:4000/socket/websocket",
+    params,
+    encoder,
+    decoder)
+```
+
 
 
 

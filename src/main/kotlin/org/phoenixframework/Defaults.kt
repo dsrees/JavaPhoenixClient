@@ -56,6 +56,22 @@ object Defaults {
       .create()
 
   /**
+   * Default JSON decoder, backed by GSON, that takes JSON and converts it
+   * into a Message object.
+   */
+  val decode: DecodeClosure = { rawMessage ->
+    gson.fromJson(rawMessage, Message::class.java)
+  }
+
+  /**
+   * Default JSON encoder, backed by GSON, that takes a Map<String, Any> and
+   * converts it into a JSON String.
+   */
+  val encode: EncodeClosure = { payload ->
+    gson.toJson(payload)
+  }
+
+  /**
    * Takes an endpoint and a params closure given by the User and constructs a URL that
    * is ready to be sent to the Socket connection.
    *

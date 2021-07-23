@@ -104,6 +104,13 @@ const val WS_CLOSE_ABNORMAL = 1006
  */
 typealias PayloadClosure = () -> Payload?
 
+/** A closure that will encode a Map<String, Any> into a JSON String */
+typealias EncodeClosure = (Map<String, Any>) -> String
+
+/** A closure that will decode a JSON String into a [Message] */
+typealias DecodeClosure = (String) -> Message
+
+
 /**
  * Connects to a Phoenix Server
  */
@@ -118,13 +125,15 @@ typealias PayloadClosure = () -> Payload?
  * ```
  * @param url Url to connect to such as https://example.com/socket
  * @param paramsClosure Closure which allows to change parameters sent during connection.
- * @param gson Default GSON Client to parse JSON. You can provide your own if needed.
+ * @param encode Optional. Provide a custom JSON encoding implementation
+ * @param decode Optional. Provide a custom JSON decoding implementation
  * @param client Default OkHttpClient to connect with. You can provide your own if needed.
  */
 class Socket(
   url: String,
   val paramsClosure: PayloadClosure,
-  private val gson: Gson = Defaults.gson,
+  private val encode: EncodeClosure = Defaults.encode,
+  private val decode: DecodeClosure = Defaults.decode,
   private val client: OkHttpClient = OkHttpClient.Builder().build()
 ) {
 
@@ -226,15 +235,17 @@ class Socket(
    *
    * @param url Url to connect to such as https://example.com/socket
    * @param params Constant parameters to send when connecting. Defaults to null
-   * @param gson Default GSON Client to parse JSON. You can provide your own if needed.
+   * @param encode Optional. Provide a custom JSON encoding implementation
+   * @param decode Optional. Provide a custom JSON decoding implementation
    * @param client Default OkHttpClient to connect with. You can provide your own if needed.
    */
   constructor(
     url: String,
     params: Payload? = null,
-    gson: Gson = Defaults.gson,
+    encode: EncodeClosure = Defaults.encode,
+    decode: DecodeClosure = Defaults.decode,
     client: OkHttpClient = OkHttpClient.Builder().build()
-  ) : this(url, { params }, gson, client)
+  ) : this(url, { params }, encode, decode, client)
 
   init {
     var mutableUrl = url
@@ -387,7 +398,7 @@ class Socket(
       ref?.let { body["ref"] = it }
       joinRef?.let { body["join_ref"] = it }
 
-      val data = gson.toJson(body)
+      val data = this.encode(body)
       connection?.let { transport ->
         this.logItems("Push: Sending $data")
         transport.send(data)
@@ -569,7 +580,7 @@ class Socket(
     this.logItems("Receive: $rawMessage")
 
     // Parse the message as JSON
-    val message = gson.fromJson(rawMessage, Message::class.java)
+    val message = this.decode(rawMessage)
 
     // Clear heartbeat ref, preventing a heartbeat timeout disconnect
     if (message.ref == pendingHeartbeatRef) pendingHeartbeatRef = null
