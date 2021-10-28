@@ -37,19 +37,24 @@ class Message(
   @SerializedName("event")
   val event: String = "",
 
-  /** The payload of the message */
+  /** The raw payload of the message. It is recommended that you use `payload` instead. */
   @SerializedName("payload")
-  val payload: Payload = HashMap(),
+  val rawPayload: Payload = HashMap(),
 
   /** The ref sent during a join event. Empty if not present. */
   @SerializedName("join_ref")
   val joinRef: String? = null) {
 
 
+  /** The payload of the message */
+  @Suppress("UNCHECKED_CAST")
+  val payload: Payload
+    get() = rawPayload["response"] as? Payload ?: rawPayload
+
   /**
    * Convenience var to access the message's payload's status. Equivalent
    * to checking message.payload["status"] yourself
    */
   val status: String?
-    get() = payload["status"] as? String
+    get() = rawPayload["status"] as? String
 }
