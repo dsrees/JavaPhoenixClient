@@ -1,14 +1,14 @@
 package org.phoenixframework
 
 import com.google.common.truth.Truth.assertThat
-import com.nhaarman.mockitokotlin2.any
-import com.nhaarman.mockitokotlin2.eq
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.never
-import com.nhaarman.mockitokotlin2.spy
-import com.nhaarman.mockitokotlin2.times
-import com.nhaarman.mockitokotlin2.verify
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.spy
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -16,7 +16,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
-import org.mockito.Mockito.verifyZeroInteractions
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.MockitoAnnotations
 import org.phoenixframework.queue.ManualDispatchQueue
 import org.phoenixframework.utilities.getBindings
@@ -509,8 +509,8 @@ class ChannelTest {
             .receive("ok", mockOk)
             .receive("error", mockError)
             .receive("timeout") {
-              verifyZeroInteractions(mockOk)
-              verifyZeroInteractions(mockError)
+              verifyNoInteractions(mockOk)
+              verifyNoInteractions(mockError)
               timeoutReceived = true
             }
 
@@ -571,8 +571,8 @@ class ChannelTest {
         receivesTimeout()
 
         verify(mockError, times(1)).invoke(any())
-        verifyZeroInteractions(mockOk)
-        verifyZeroInteractions(mockTimeout)
+        verifyNoInteractions(mockOk)
+        verifyNoInteractions(mockTimeout)
       }
 
       @Test
@@ -619,7 +619,7 @@ class ChannelTest {
         channel.pushBuffer.add(mockPush)
 
         receivesError()
-        verifyZeroInteractions(mockPush)
+        verifyNoInteractions(mockPush)
         assertThat(channel.pushBuffer).hasSize(1)
       }
 
@@ -744,7 +744,7 @@ class ChannelTest {
       joinPush.trigger("ok", kEmptyPayload)
 
       assertThat(channel.state).isEqualTo(Channel.State.JOINED)
-      verifyZeroInteractions(mockCallback)
+      verifyNoInteractions(mockCallback)
 
       channel.trigger(Channel.Event.ERROR)
       verify(mockCallback, times(1)).invoke(any())
@@ -815,7 +815,7 @@ class ChannelTest {
     @Test
     internal fun `triggers additional callbacks`() {
       channel.onClose(mockCallback)
-      verifyZeroInteractions(mockCallback)
+      verifyNoInteractions(mockCallback)
 
       channel.trigger(Channel.Event.CLOSE)
       verify(mockCallback, times(1)).invoke(any())
@@ -907,8 +907,8 @@ class ChannelTest {
       channel.trigger(event = "event", ref = kDefaultRef)
       channel.trigger(event = "other", ref = kDefaultRef)
 
-      verifyZeroInteractions(callback1)
-      verifyZeroInteractions(callback2)
+      verifyNoInteractions(callback1)
+      verifyNoInteractions(callback2)
       verify(callback3, times(1)).invoke(any())
     }
 
@@ -923,7 +923,7 @@ class ChannelTest {
       channel.off("event", ref1)
       channel.trigger(event = "event", ref = kDefaultRef)
 
-      verifyZeroInteractions(callback1)
+      verifyNoInteractions(callback1)
       verify(callback2, times(1)).invoke(any())
     }
 
@@ -981,7 +981,7 @@ class ChannelTest {
           .receive("timeout", mockCallback)
 
       fakeClock.tick(channel.timeout / 2)
-      verifyZeroInteractions(mockCallback)
+      verifyNoInteractions(mockCallback)
 
       fakeClock.tick(channel.timeout)
       verify(mockCallback).invoke(any())
@@ -995,7 +995,7 @@ class ChannelTest {
           .receive("timeout", mockCallback)
 
       fakeClock.tick(channel.timeout)
-      verifyZeroInteractions(mockCallback)
+      verifyNoInteractions(mockCallback)
 
       fakeClock.tick(channel.timeout * 2)
       verify(mockCallback).invoke(any())
@@ -1009,12 +1009,12 @@ class ChannelTest {
           .receive("timeout", mockCallback)
 
       fakeClock.tick(channel.timeout / 2)
-      verifyZeroInteractions(mockCallback)
+      verifyNoInteractions(mockCallback)
 
       push.trigger("ok", kEmptyPayload)
 
       fakeClock.tick(channel.timeout)
-      verifyZeroInteractions(mockCallback)
+      verifyNoInteractions(mockCallback)
     }
 
     @Test
