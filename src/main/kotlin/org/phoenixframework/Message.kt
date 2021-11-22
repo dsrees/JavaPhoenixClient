@@ -22,29 +22,23 @@
 
 package org.phoenixframework
 
-import com.google.gson.annotations.SerializedName
 
-class Message(
+data class Message(
+  /** The ref sent during a join event. Empty if not present. */
+  val joinRef: String? = null,
+
   /** The unique string ref. Empty if not present */
-  @SerializedName("ref")
   val ref: String = "",
 
   /** The message topic */
-  @SerializedName("topic")
   val topic: String = "",
 
   /** The message event name, for example "phx_join" or any other custom name */
-  @SerializedName("event")
   val event: String = "",
 
   /** The raw payload of the message. It is recommended that you use `payload` instead. */
-  @SerializedName("payload")
-  val rawPayload: Payload = HashMap(),
-
-  /** The ref sent during a join event. Empty if not present. */
-  @SerializedName("join_ref")
-  val joinRef: String? = null) {
-
+  internal val rawPayload: Payload = HashMap()
+) {
 
   /** The payload of the message */
   @Suppress("UNCHECKED_CAST")

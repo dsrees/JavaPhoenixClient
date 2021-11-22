@@ -14,15 +14,7 @@ class MessageTest {
     @Test
     internal fun `jsonParsing parses normal message`() {
       val json = """
-        {
-          "event": "update",
-          "payload": {
-            "user": "James S.",
-            "message": "This is a test"
-          },
-          "ref": "6",
-          "topic": "my-topic"
-        }
+        [null, "6", "my-topic", "update", {"user": "James S.", "message": "This is a test"}]
       """.trimIndent()
 
       val message = Defaults.decode.invoke(json)
@@ -38,18 +30,7 @@ class MessageTest {
     @Test
     internal fun `jsonParsing parses a reply`() {
       val json = """
-        {
-          "event": "phx_reply",
-          "payload": {
-            "response": {
-              "user": "James S.",
-              "message": "This is a test"
-            },
-            "status": "ok"
-          },
-          "ref": "6",
-          "topic": "my-topic"
-        }
+        [null, "6", "my-topic", "phx_reply", {"response": {"user": "James S.","message": "This is a test"},"status": "ok"}]
       """.trimIndent()
 
       val message = Defaults.decode.invoke(json)

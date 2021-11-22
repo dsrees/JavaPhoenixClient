@@ -42,4 +42,26 @@ internal class DefaultsTest {
     assertThat(reconnect(4)).isEqualTo(10_000)
     assertThat(reconnect(5)).isEqualTo(10_000)
   }
+
+
+  @Test
+  internal fun `decoder converts json array into message`() {
+    val v2Json = """
+      [null,null,"room:lobby","shout",{"message":"Hi","name":"Tester"}]
+    """.trimIndent()
+
+    val message = Defaults.decode(v2Json)
+    assertThat(message.joinRef).isNull()
+    assertThat(message.ref).isEqualTo("")
+    assertThat(message.topic).isEqualTo("room:lobby")
+    assertThat(message.event).isEqualTo("shout")
+    assertThat(message.payload).isEqualTo(mapOf("message" to "Hi", "name" to "Tester"))
+  }
+
+  @Test
+  internal fun `encode converts message into json`() {
+    val body = listOf(null, null, "topic", "event", mapOf("one" to "two"))
+    assertThat(Defaults.encode(body))
+      .isEqualTo("[null,null,\"topic\",\"event\",{\"one\":\"two\"}]")
+  }
 }
