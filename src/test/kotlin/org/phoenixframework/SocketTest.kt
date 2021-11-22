@@ -1,16 +1,16 @@
 package org.phoenixframework
 
 import com.google.common.truth.Truth.assertThat
-import com.nhaarman.mockitokotlin2.any
-import com.nhaarman.mockitokotlin2.argumentCaptor
-import com.nhaarman.mockitokotlin2.eq
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.never
-import com.nhaarman.mockitokotlin2.spy
-import com.nhaarman.mockitokotlin2.times
-import com.nhaarman.mockitokotlin2.verify
-import com.nhaarman.mockitokotlin2.verifyZeroInteractions
-import com.nhaarman.mockitokotlin2.whenever
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.spy
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
+import org.mockito.kotlin.whenever
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import org.junit.jupiter.api.BeforeEach
@@ -363,7 +363,7 @@ class SocketTest {
     @Test
     internal fun `does nothing if not connected`() {
       socket.disconnect()
-      verifyZeroInteractions(connection)
+      verifyNoInteractions(connection)
     }
 
     /* End Disconnect */
@@ -664,7 +664,7 @@ class SocketTest {
       socket.skipHeartbeat = true
       socket.resetHeartbeat()
 
-      verifyZeroInteractions(mockDispatchQueue)
+      verifyNoInteractions(mockDispatchQueue)
     }
 
     @Test
