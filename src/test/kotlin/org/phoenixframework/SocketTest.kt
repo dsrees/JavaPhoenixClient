@@ -53,6 +53,7 @@ class SocketTest {
       assertThat(socket.sendBuffer).isEmpty()
       assertThat(socket.ref).isEqualTo(0)
       assertThat(socket.endpoint).isEqualTo("wss://localhost:4000/socket/websocket")
+      assertThat(socket.vsn).isEqualTo(Defaults.VSN)
       assertThat(socket.stateChangeCallbacks.open).isEmpty()
       assertThat(socket.stateChangeCallbacks.close).isEmpty()
       assertThat(socket.stateChangeCallbacks.error).isEmpty()
@@ -94,34 +95,34 @@ class SocketTest {
     internal fun `constructs with a valid URL`() {
       // Test different schemes
       assertThat(Socket("http://localhost:4000/socket/websocket").endpointUrl.toString())
-        .isEqualTo("http://localhost:4000/socket/websocket")
+        .isEqualTo("http://localhost:4000/socket/websocket?vsn=2.0.0")
 
       assertThat(Socket("https://localhost:4000/socket/websocket").endpointUrl.toString())
-        .isEqualTo("https://localhost:4000/socket/websocket")
+        .isEqualTo("https://localhost:4000/socket/websocket?vsn=2.0.0")
 
       assertThat(Socket("ws://localhost:4000/socket/websocket").endpointUrl.toString())
-        .isEqualTo("http://localhost:4000/socket/websocket")
+        .isEqualTo("http://localhost:4000/socket/websocket?vsn=2.0.0")
 
       assertThat(Socket("wss://localhost:4000/socket/websocket").endpointUrl.toString())
-        .isEqualTo("https://localhost:4000/socket/websocket")
+        .isEqualTo("https://localhost:4000/socket/websocket?vsn=2.0.0")
 
       // test params
       val singleParam = hashMapOf("token" to "abc123")
       assertThat(Socket("ws://localhost:4000/socket/websocket", singleParam).endpointUrl.toString())
-        .isEqualTo("http://localhost:4000/socket/websocket?token=abc123")
+        .isEqualTo("http://localhost:4000/socket/websocket?vsn=2.0.0&token=abc123")
 
       val multipleParams = hashMapOf("token" to "abc123", "user_id" to 1)
       assertThat(
         Socket("http://localhost:4000/socket/websocket", multipleParams).endpointUrl.toString()
       )
-        .isEqualTo("http://localhost:4000/socket/websocket?user_id=1&token=abc123")
+        .isEqualTo("http://localhost:4000/socket/websocket?vsn=2.0.0&user_id=1&token=abc123")
 
       // test params with spaces
       val spacesParams = hashMapOf("token" to "abc 123", "user_id" to 1)
       assertThat(
         Socket("wss://localhost:4000/socket/websocket", spacesParams).endpointUrl.toString()
       )
-        .isEqualTo("https://localhost:4000/socket/websocket?user_id=1&token=abc%20123")
+        .isEqualTo("https://localhost:4000/socket/websocket?vsn=2.0.0&user_id=1&token=abc%20123")
     }
 
     /* End Constructor */
@@ -199,13 +200,13 @@ class SocketTest {
       socket.connect()
       argumentCaptor<URL> {
         verify(transport).invoke(capture())
-        assertThat(firstValue.query).isEqualTo("token=a")
+        assertThat(firstValue.query).isEqualTo("vsn=2.0.0&token=a")
 
         token = "b"
         socket.disconnect()
         socket.connect()
         verify(transport, times(2)).invoke(capture())
-        assertThat(lastValue.query).isEqualTo("token=b")
+        assertThat(lastValue.query).isEqualTo("vsn=2.0.0&token=b")
       }
     }
 
@@ -239,12 +240,7 @@ class SocketTest {
       assertThat(lastError).isNotNull()
       assertThat(lastResponse).isNull()
 
-      val data = mapOf(
-        "topic" to "topic",
-        "event" to "event",
-        "payload" to mapOf("go" to true),
-        "status" to "status"
-      )
+      val data = listOf(null, null, "topic", "event", mapOf("go" to true))
 
       val json = Defaults.gson.toJson(data)
       socket.connection?.onMessage?.invoke(json)
@@ -282,12 +278,7 @@ class SocketTest {
       assertThat(lastError).isNull()
       assertThat(lastResponse).isNull()
 
-      val data = mapOf(
-        "topic" to "topic",
-        "event" to "event",
-        "payload" to mapOf("go" to true),
-        "status" to "status"
-      )
+      val data = listOf(null, null, "topic", "event", mapOf("go" to true))
 
       val json = Defaults.gson.toJson(data)
       socket.connection?.onMessage?.invoke(json)
@@ -480,9 +471,8 @@ class SocketTest {
       socket.connect()
       socket.push("topic", "event", mapOf("one" to "two"), "ref", "join-ref")
 
-      val expect =
-        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"ref\",\"join_ref\":\"join-ref\"}"
-      verify(connection).send(expect)
+      val expected = "[\"join-ref\",\"ref\",\"topic\",\"event\",{\"one\":\"two\"}]"
+      verify(connection).send(expected)
     }
 
     @Test
@@ -492,8 +482,8 @@ class SocketTest {
       socket.connect()
       socket.push("topic", "event", mapOf("one" to "two"))
 
-      val expect = "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"}}"
-      verify(connection).send(expect)
+      val expected = "[null,null,\"topic\",\"event\",{\"one\":\"two\"}]"
+      verify(connection).send(expected)
     }
 
     @Test
@@ -564,7 +554,7 @@ class SocketTest {
     internal fun `pushes heartbeat data when connected`() {
       socket.sendHeartbeat()
 
-      val expected = "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
+      val expected = "[null,\"1\",\"phoenix\",\"heartbeat\",{}]"
       assertThat(socket.pendingHeartbeatRef).isEqualTo(socket.ref.toString())
       verify(connection).send(expected)
     }
@@ -689,8 +679,7 @@ class SocketTest {
         // fire the task
         allValues.first().invoke()
 
-        val expected =
-          "{\"topic\":\"phoenix\",\"event\":\"heartbeat\",\"payload\":{},\"ref\":\"1\"}"
+        val expected = "[null,\"1\",\"phoenix\",\"heartbeat\",{}]"
         verify(connection).send(expected)
       }
     }
@@ -951,6 +940,8 @@ class SocketTest {
   @Nested
   @DisplayName("onConnectionMessage")
   inner class OnConnectionMessage {
+
+
     @Test
     internal fun `parses raw messages and triggers channel event`() {
       val targetChannel = mock<Channel>()
@@ -961,8 +952,7 @@ class SocketTest {
       socket.channels = socket.channels.plus(targetChannel)
       socket.channels = socket.channels.minus(otherChannel)
 
-      val rawMessage =
-        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
+      val rawMessage = "[null,null,\"topic\",\"event\",{\"one\":\"two\",\"status\":\"ok\"}]"
       socket.onConnectionMessage(rawMessage)
 
       verify(targetChannel).trigger(message = any())
@@ -974,8 +964,7 @@ class SocketTest {
       var message: Message? = null
       socket.onMessage { message = it }
 
-      val rawMessage =
-        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"status\":\"ok\"}"
+      val rawMessage = "[null,null,\"topic\",\"event\",{\"one\":\"two\",\"status\":\"ok\"}]"
       socket.onConnectionMessage(rawMessage)
 
       assertThat(message?.topic).isEqualTo("topic")
@@ -986,8 +975,7 @@ class SocketTest {
     internal fun `clears pending heartbeat`() {
       socket.pendingHeartbeatRef = "5"
 
-      val rawMessage =
-        "{\"topic\":\"topic\",\"event\":\"event\",\"payload\":{\"one\":\"two\"},\"ref\":\"5\"}"
+      val rawMessage = "[null,\"5\",\"topic\",\"event\",{\"one\":\"two\",\"status\":\"ok\"}]"
       socket.onConnectionMessage(rawMessage)
       assertThat(socket.pendingHeartbeatRef).isNull()
     }
@@ -1062,11 +1050,12 @@ class SocketTest {
         oneCalled += 1
       }
 
-      socket.onConnectionMessage("{\"status\":\"ok\"}")
+      val message = "[null,null,\"room:lobby\",\"shout\",{\"message\":\"Hi\",\"name\":\"Tester\"}]"
+      socket.onConnectionMessage(message)
       assertThat(oneCalled).isEqualTo(1)
       assertThat(twoCalled).isEqualTo(0)
 
-      socket.onConnectionMessage("{\"status\":\"ok\"}")
+      socket.onConnectionMessage(message)
       assertThat(oneCalled).isEqualTo(2)
       assertThat(twoCalled).isEqualTo(1)
     }

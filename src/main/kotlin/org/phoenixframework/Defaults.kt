@@ -25,6 +25,7 @@ package org.phoenixframework
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.reflect.TypeToken
 import okhttp3.HttpUrl
 import java.net.URL
 
@@ -35,6 +36,9 @@ object Defaults {
 
   /** Default heartbeat interval of 30s */
   const val HEARTBEAT: Long = 30_000
+
+  /** Default JSON Serializer Version set to 2.0.0 */
+  const val VSN: String = "2.0.0"
 
   /** Default reconnect algorithm for the socket */
   val reconnectSteppedBackOff: (Int) -> Long = { tries ->
@@ -59,8 +63,21 @@ object Defaults {
    * Default JSON decoder, backed by GSON, that takes JSON and converts it
    * into a Message object.
    */
+  @Suppress("UNCHECKED_CAST")
   val decode: DecodeClosure = { rawMessage ->
-    gson.fromJson(rawMessage, Message::class.java)
+    val anyType = object : TypeToken<List<Any>>() {}.type
+    val result = gson.fromJson<List<Any>>(rawMessage, anyType)
+
+
+    // vsn=2.0.0 message structure
+    // [join_ref, ref, topic, event, payload]
+    Message(
+      joinRef = result[0] as? String?,
+      ref = result[1] as? String ?: "",
+      topic = result[2] as? String ?: "",
+      event = result[3] as? String ?: "",
+      rawPayload = result[4] as? Payload ?: mapOf()
+    )
   }
 
   /**
@@ -81,7 +98,8 @@ object Defaults {
    */
   internal fun buildEndpointUrl(
     endpoint: String,
-    paramsClosure: PayloadClosure
+    paramsClosure: PayloadClosure,
+    vsn: String
   ): URL {
     var mutableUrl = endpoint
     // Silently replace web socket URLs with HTTP URLs.
@@ -91,19 +109,20 @@ object Defaults {
       mutableUrl = "https:" + endpoint.substring(4)
     }
 
-    // If there are query params, append them now
-    var httpUrl =
-      HttpUrl.parse(mutableUrl) ?: throw IllegalArgumentException("invalid url: $endpoint")
+    // Add the VSN query parameter
+    var httpUrl = HttpUrl.parse(mutableUrl)
+      ?: throw IllegalArgumentException("invalid url: $endpoint")
+    val httpBuilder = httpUrl.newBuilder()
+    httpBuilder.addQueryParameter("vsn", vsn)
+
+    // Append any additional query params
     paramsClosure.invoke()?.let {
-      val httpBuilder = httpUrl.newBuilder()
       it.forEach { (key, value) ->
         httpBuilder.addQueryParameter(key, value.toString())
       }
-
-      httpUrl = httpBuilder.build()
     }
 
-    // Store the URL that will be used to establish a connection
-    return httpUrl.url()
+    // Return the [URL] that will be used to establish a connection
+    return httpBuilder.build().url()
   }
 }

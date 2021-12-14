@@ -5,11 +5,11 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 
 android {
-    compileSdkVersion 28
+    compileSdkVersion 30
     defaultConfig {
         applicationId "com.github.dsrees.chatexample"
         minSdkVersion 19
-        targetSdkVersion 28
+        targetSdkVersion 30
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -36,8 +36,8 @@ dependencies {
             `/build/lib/*.jar` to `/ChatExample/app/libs`
         and comment out the mavenCentral() dependency
      */
-//    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'com.github.dsrees:JavaPhoenixClient:0.3.4'
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+//    implementation 'com.github.dsrees:JavaPhoenixClient:0.3.4'
 
 
     implementation "com.google.code.gson:gson:2.8.5"

@@ -22,8 +22,6 @@
 
 package org.phoenixframework
 
-import com.google.gson.Gson
-import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import java.net.URL
@@ -105,7 +103,7 @@ const val WS_CLOSE_ABNORMAL = 1006
 typealias PayloadClosure = () -> Payload?
 
 /** A closure that will encode a Map<String, Any> into a JSON String */
-typealias EncodeClosure = (Map<String, Any>) -> String
+typealias EncodeClosure = (Any) -> String
 
 /** A closure that will decode a JSON String into a [Message] */
 typealias DecodeClosure = (String) -> Message
@@ -125,6 +123,7 @@ typealias DecodeClosure = (String) -> Message
  * ```
  * @param url Url to connect to such as https://example.com/socket
  * @param paramsClosure Closure which allows to change parameters sent during connection.
+ * @param vsn JSON Serializer version to use. Defaults to 2.0.0
  * @param encode Optional. Provide a custom JSON encoding implementation
  * @param decode Optional. Provide a custom JSON decoding implementation
  * @param client Default OkHttpClient to connect with. You can provide your own if needed.
@@ -132,6 +131,7 @@ typealias DecodeClosure = (String) -> Message
 class Socket(
   url: String,
   val paramsClosure: PayloadClosure,
+  val vsn: String = Defaults.VSN,
   private val encode: EncodeClosure = Defaults.encode,
   private val decode: DecodeClosure = Defaults.decode,
   private val client: OkHttpClient = OkHttpClient.Builder().build()
@@ -235,6 +235,7 @@ class Socket(
    *
    * @param url Url to connect to such as https://example.com/socket
    * @param params Constant parameters to send when connecting. Defaults to null
+   * @param vsn JSON Serializer version to use. Defaults to 2.0.0
    * @param encode Optional. Provide a custom JSON encoding implementation
    * @param decode Optional. Provide a custom JSON decoding implementation
    * @param client Default OkHttpClient to connect with. You can provide your own if needed.
@@ -242,10 +243,11 @@ class Socket(
   constructor(
     url: String,
     params: Payload? = null,
+    vsn: String = Defaults.VSN,
     encode: EncodeClosure = Defaults.encode,
     decode: DecodeClosure = Defaults.decode,
     client: OkHttpClient = OkHttpClient.Builder().build()
-  ) : this(url, { params }, encode, decode, client)
+  ) : this(url, { params }, vsn, encode, decode, client)
 
   init {
     var mutableUrl = url
@@ -266,7 +268,7 @@ class Socket(
 
     // Store the URL that will be used to establish a connection. Could potentially be
     // different at the time connect() is called based on a changing params closure.
-    this.endpointUrl = Defaults.buildEndpointUrl(this.endpoint, this.paramsClosure)
+    this.endpointUrl = Defaults.buildEndpointUrl(this.endpoint, this.paramsClosure, this.vsn)
 
     // Create reconnect timer
     this.reconnectTimer = TimeoutTimer(
@@ -305,7 +307,7 @@ class Socket(
 
     // Build the new endpointUrl with the params closure. The payload returned
     // from the closure could be different such as a changing authToken.
-    this.endpointUrl = Defaults.buildEndpointUrl(this.endpoint, this.paramsClosure)
+    this.endpointUrl = Defaults.buildEndpointUrl(this.endpoint, this.paramsClosure, this.vsn)
 
     // Now create the connection transport and attempt to connect
     this.connection = this.transport(endpointUrl)
@@ -390,14 +392,7 @@ class Socket(
   ) {
 
     val callback: (() -> Unit) = {
-      val body = mutableMapOf<String, Any>()
-      body["topic"] = topic
-      body["event"] = event
-      body["payload"] = payload
-
-      ref?.let { body["ref"] = it }
-      joinRef?.let { body["join_ref"] = it }
-
+      val body = listOf(joinRef, ref, topic, event, payload)
       val data = this.encode(body)
       connection?.let { transport ->
         this.logItems("Push: Sending $data")
