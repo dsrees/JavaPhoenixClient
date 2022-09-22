@@ -155,6 +155,7 @@ class WebSocketTransport(
 
   override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
     this.readyState = Transport.ReadyState.CLOSING
+    webSocket.close(code, reason)
   }
 
   override fun onMessage(webSocket: WebSocket, text: String) {
