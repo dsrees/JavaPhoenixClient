@@ -37,7 +37,10 @@ data class Message(
   val event: String = "",
 
   /** The raw payload of the message. It is recommended that you use `payload` instead. */
-  internal val rawPayload: Payload = HashMap()
+  internal val rawPayload: Payload = HashMap(),
+
+  /** The payload, as a json string */
+  val payloadJson: String = ""
 ) {
 
   /** The payload of the message */
