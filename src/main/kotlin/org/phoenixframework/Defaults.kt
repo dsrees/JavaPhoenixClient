@@ -25,6 +25,8 @@ package org.phoenixframework
 import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import okhttp3.HttpUrl
 import java.net.URL
@@ -65,18 +67,44 @@ object Defaults {
    */
   @Suppress("UNCHECKED_CAST")
   val decode: DecodeClosure = { rawMessage ->
-    val anyType = object : TypeToken<List<Any>>() {}.type
-    val result = gson.fromJson<List<Any>>(rawMessage, anyType)
 
+    var message = rawMessage
+    message = message.removeRange(0, 1) // remove '['
+
+    val joinRef = message.takeWhile { it != ',' } // take join ref, 'null' or '5'
+    message = message.removeRange(0, joinRef.length) // remove join ref
+    message = message.removeRange(0, 1) // remove ','
+
+    val ref = message.takeWhile { it != ',' } // take ref, 'null' or '5'
+    message = message.removeRange(0, ref.length) // remove ref
+    message = message.removeRange(0, 2) // remove ',"'
+
+    val topic = message.takeWhile { it != '"' }
+    message = message.removeRange(0, topic.length)
+    message = message.removeRange(0, 3) // remove '","'
+
+    val event = message.takeWhile { it != '"' }
+    message = message.removeRange(0, event.length)
+    message = message.removeRange(0, 2) // remove '",'
+
+    val remaining = message.removeRange(message.length - 1, message.length)
+
+    val jsonObj = gson.fromJson(remaining, JsonObject::class.java)
+    val response = jsonObj.get("response")
+    val payload =  response?.let { gson.toJson(response) } ?: remaining
+
+    val anyType = object : TypeToken<Map<String, Any>>() {}.type
+    val result = gson.fromJson<Map<String, Any>>(remaining, anyType)
 
     // vsn=2.0.0 message structure
     // [join_ref, ref, topic, event, payload]
     Message(
-      joinRef = result[0] as? String?,
-      ref = result[1] as? String ?: "",
-      topic = result[2] as? String ?: "",
-      event = result[3] as? String ?: "",
-      rawPayload = result[4] as? Payload ?: mapOf()
+      joinRef = joinRef.toIntOrNull()?.toString(),
+      ref = ref.toIntOrNull()?.toString() ?: "",
+      topic = topic,
+      event = event,
+      rawPayload = result,
+      payloadJson = payload
     )
   }
 

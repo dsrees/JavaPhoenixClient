@@ -43,7 +43,6 @@ internal class DefaultsTest {
     assertThat(reconnect(5)).isEqualTo(10_000)
   }
 
-
   @Test
   internal fun `decoder converts json array into message`() {
     val v2Json = """
@@ -56,6 +55,60 @@ internal class DefaultsTest {
     assertThat(message.topic).isEqualTo("room:lobby")
     assertThat(message.event).isEqualTo("shout")
     assertThat(message.payload).isEqualTo(mapOf("message" to "Hi", "name" to "Tester"))
+  }
+
+  @Test
+  internal fun `decoder provides raw json payload`() {
+    val v2Json = """
+      [1,2,"room:lobby","shout",{"message":"Hi","name":"Tester","count":15,"ratio":0.2}]
+    """.trimIndent()
+
+    val message = Defaults.decode(v2Json)
+    assertThat(message.joinRef).isEqualTo("1")
+    assertThat(message.ref).isEqualTo("2")
+    assertThat(message.topic).isEqualTo("room:lobby")
+    assertThat(message.event).isEqualTo("shout")
+    assertThat(message.payloadJson).isEqualTo("{\"message\":\"Hi\",\"name\":\"Tester\",\"count\":15,\"ratio\":0.2}")
+    assertThat(message.payload).isEqualTo(mapOf(
+      "message" to "Hi",
+      "name" to "Tester",
+      "count" to 15.0, // Note that this is a bug and should eventually be removed
+      "ratio" to 0.2
+    ))
+  }
+
+  @Test
+  internal fun `decoder decodes a status`() {
+    val v2Json = """
+      [1,2,"room:lobby","phx_reply",{"response":{"message":"Hi","name":"Tester","count":15,"ratio":0.2},"status":"ok"}]
+    """.trimIndent()
+
+    val message = Defaults.decode(v2Json)
+    assertThat(message.joinRef).isEqualTo("1")
+    assertThat(message.ref).isEqualTo("2")
+    assertThat(message.topic).isEqualTo("room:lobby")
+    assertThat(message.event).isEqualTo("phx_reply")
+    assertThat(message.payloadJson).isEqualTo("{\"message\":\"Hi\",\"name\":\"Tester\",\"count\":15,\"ratio\":0.2}")
+    assertThat(message.payload).isEqualTo(mapOf(
+      "message" to "Hi",
+      "name" to "Tester",
+      "count" to 15.0, // Note that this is a bug and should eventually be removed
+      "ratio" to 0.2
+    ))
+  }
+
+  @Test
+  internal fun `decoder decodes a non-json payload`() {
+    val v2Json = """
+      [1,2,"room:lobby","phx_reply",{"response":"hello","status":"ok"}]
+    """.trimIndent()
+
+    val message = Defaults.decode(v2Json)
+    assertThat(message.payloadJson).isEqualTo("\"hello\"")
+    assertThat(message.payload).isEqualTo(mapOf(
+      "response" to "hello",
+      "status" to "ok"
+    ))
   }
 
   @Test
