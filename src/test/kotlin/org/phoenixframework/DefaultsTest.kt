@@ -97,10 +97,32 @@ internal class DefaultsTest {
     ))
   }
 
+
+
+  @Test
+  internal fun `decoder decodes an error`() {
+    val v2Json = """
+      ["6","8","drivers:self","phx_reply",{"response":{"details":"invalid code specified"},"status":"error"}]
+    """.trimIndent()
+
+    val message = Defaults.decode(v2Json)
+    assertThat(message.payloadJson).isEqualTo("{\"details\":\"invalid code specified\"}")
+    assertThat(message.rawPayload).isEqualTo(mapOf(
+      "response" to mapOf(
+        "details" to "invalid code specified"
+      ),
+      "status" to "error"
+    ))
+    assertThat(message.payload).isEqualTo(mapOf(
+      "details" to "invalid code specified"
+    ))
+
+  }
+
   @Test
   internal fun `decoder decodes a non-json payload`() {
     val v2Json = """
-      [1,2,"room:lobby","phx_reply",{"response":"hello","status":"ok"}]
+      ["1","2","room:lobby","phx_reply",{"response":"hello","status":"ok"}]
     """.trimIndent()
 
     val message = Defaults.decode(v2Json)

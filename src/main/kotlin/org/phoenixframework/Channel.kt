@@ -224,7 +224,7 @@ class Channel(
 
     // Perform when the join reply is received
     this.on(Event.REPLY) { message ->
-      this.trigger(replyEventName(message.ref), message.rawPayload, message.ref, message.joinRef)
+      this.trigger(replyEventName(message.ref), message.rawPayload, message.ref, message.joinRef, message.payloadJson)
     }
   }
 
@@ -383,18 +383,20 @@ class Channel(
     event: Event,
     payload: Payload = hashMapOf(),
     ref: String = "",
-    joinRef: String? = null
+    joinRef: String? = null,
+    payloadJson: String = ""
   ) {
-    this.trigger(event.value, payload, ref, joinRef)
+    this.trigger(event.value, payload, ref, joinRef, payloadJson)
   }
 
   internal fun trigger(
     event: String,
     payload: Payload = hashMapOf(),
     ref: String = "",
-    joinRef: String? = null
+    joinRef: String? = null,
+    payloadJson: String = ""
   ) {
-    this.trigger(Message(joinRef, ref, topic, event, payload))
+    this.trigger(Message(joinRef, ref, topic, event, payload, payloadJson))
   }
 
   internal fun trigger(message: Message) {
