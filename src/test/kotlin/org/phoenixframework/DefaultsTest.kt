@@ -60,7 +60,7 @@ internal class DefaultsTest {
   @Test
   internal fun `decoder provides raw json payload`() {
     val v2Json = """
-      [1,2,"room:lobby","shout",{"message":"Hi","name":"Tester","count":15,"ratio":0.2}]
+      ["1","2","room:lobby","shout",{"message":"Hi","name":"Tester","count":15,"ratio":0.2}]
     """.trimIndent()
 
     val message = Defaults.decode(v2Json)
@@ -80,7 +80,7 @@ internal class DefaultsTest {
   @Test
   internal fun `decoder decodes a status`() {
     val v2Json = """
-      [1,2,"room:lobby","phx_reply",{"response":{"message":"Hi","name":"Tester","count":15,"ratio":0.2},"status":"ok"}]
+      ["1","2","room:lobby","phx_reply",{"response":{"message":"Hi","name":"Tester","count":15,"ratio":0.2},"status":"ok"}]
     """.trimIndent()
 
     val message = Defaults.decode(v2Json)
