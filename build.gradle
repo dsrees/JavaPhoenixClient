@@ -1,57 +1,75 @@
-buildscript { repositories { jcenter() } }
-plugins {
-    id 'java'
-    id 'org.jetbrains.kotlin.jvm' version '1.2.51'
-    id 'nebula.project' version '4.0.1'
-    id "nebula.maven-publish" version "7.2.4"
-    id 'nebula.nebula-bintray' version '3.5.5'
+buildscript {
+  repositories {
+    jcenter()
+    mavenCentral()
+  }
+
+  dependencies {
+    classpath 'com.vanniktech:gradle-maven-publish-plugin:0.14.2'
+    classpath 'org.jetbrains.dokka:dokka-gradle-plugin:1.4.30'
+  }
 }
 
+plugins {
+  id 'java'
+  id 'jacoco'
+  id 'org.jetbrains.kotlin.jvm' version '1.3.31'
+}
+
+ext {
+  RELEASE_REPOSITORY_URL = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+  SNAPSHOT_REPOSITORY_URL = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+}
+
+apply plugin: "org.jetbrains.dokka"
+apply plugin: "com.vanniktech.maven.publish"
+
 group 'com.github.dsrees'
-version '0.1.6'
+version '1.1.3'
 
 sourceCompatibility = 1.8
 
 repositories {
-    mavenCentral()
+  jcenter()
+  mavenCentral()
+}
+
+test {
+  // JUnit 5 Support
+  useJUnitPlatform()
+
+  // This allows us see tests execution progress in the output on the CI.
+  testLogging {
+    events 'passed', 'skipped', 'failed', 'standardOut', 'standardError'
+    exceptionFormat 'full'
+  }
+
 }
 
 dependencies {
-    compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    compile "com.google.code.gson:gson:2.8.5"
-    compile "com.squareup.okhttp3:okhttp:3.10.0"
+  compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+  compile "com.google.code.gson:gson:2.8.5"
+  compile "com.squareup.okhttp3:okhttp:3.12.2"
 
+  testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.1'
+  testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
 
-    testCompile group: 'junit', name: 'junit', version: '4.12'
-    testCompile group: 'com.google.truth', name: 'truth', version: '0.42'
-    testCompile group: 'org.mockito', name: 'mockito-core', version: '2.19.1'
+  testCompile group: 'com.google.truth', name: 'truth', version: '1.1.3'
+  testCompile group: 'org.mockito', name: 'mockito-core', version: '4.0.0'
+  testCompile group: 'org.mockito.kotlin', name: 'mockito-kotlin', version: '4.0.0'
+}
 
+jacocoTestReport {
+  reports {
+    xml.enabled true
+    html.enabled false
+  }
 }
 
 compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+  kotlinOptions.jvmTarget = "1.8"
 }
 compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+  kotlinOptions.jvmTarget = "1.8"
 }
 
-bintray {
-    user = System.getenv('bintrayUser')
-    key = System.getenv('bintrayApiKey')
-    dryRun = false
-    publish = true
-    pkg {
-        repo = 'java-phoenix-client'
-        name = 'JavaPhoenixClient'
-        userOrg = user
-        websiteUrl = 'https://github.com/dsrees/JavaPhoenixClient'
-        issueTrackerUrl = 'https://github.com/dsrees/JavaPhoenixClient/issues'
-        vcsUrl = 'https://github.com/dsrees/JavaPhoenixClient.git'
-        licenses = ['MIT']
-        version {
-            name = project.version
-            vcsTag = project.version
-        }
-    }
-    publications = ['nebula']
-}
