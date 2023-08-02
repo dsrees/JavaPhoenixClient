@@ -136,6 +136,7 @@ class WebSocketTransportTest {
       transport.readyState = Transport.ReadyState.OPEN
 
       transport.onClosing(mockWebSocket, 10, "reason")
+      verify(mockWebSocket).close(10, "reason")
       assertThat(transport.readyState).isEqualTo(Transport.ReadyState.CLOSING)
     }
 
