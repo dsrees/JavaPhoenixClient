@@ -29,6 +29,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.phoenixframework.Defaults.gson
 import java.net.URL
 import javax.swing.text.html.HTML.Tag.P
@@ -149,7 +150,7 @@ object Defaults {
     }
 
     // Add the VSN query parameter
-    var httpUrl = HttpUrl.parse(mutableUrl)
+    var httpUrl = mutableUrl.toHttpUrlOrNull()
       ?: throw IllegalArgumentException("invalid url: $endpoint")
     val httpBuilder = httpUrl.newBuilder()
     httpBuilder.addQueryParameter("vsn", vsn)
@@ -162,6 +163,6 @@ object Defaults {
     }
 
     // Return the [URL] that will be used to establish a connection
-    return httpBuilder.build().url()
+    return httpBuilder.build().toUrl()
   }
 }
