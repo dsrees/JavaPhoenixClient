@@ -25,7 +25,7 @@ apply plugin: "org.jetbrains.dokka"
 apply plugin: "com.vanniktech.maven.publish"
 
 group 'com.github.dsrees'
-version '1.1.4'
+version '1.1.5'
 
 sourceCompatibility = 1.8
 
