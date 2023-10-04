@@ -273,7 +273,7 @@ class Socket(
     // Create reconnect timer
     this.reconnectTimer = TimeoutTimer(
       dispatchQueue = dispatchQueue,
-      timerCalculation = reconnectAfterMs,
+      timerCalculation = { reconnectAfterMs(it) },
       callback = {
         this.logItems("Socket attempting to reconnect")
         this.teardown { this.connect() }
