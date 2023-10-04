@@ -3,11 +3,8 @@ package com.github.dsrees.chatexample
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.EditText
 import androidx.recyclerview.widget.LinearLayoutManager
-import kotlinx.android.synthetic.main.activity_main.*
+import com.github.dsrees.chatexample.databinding.ActivityMainBinding
 import org.phoenixframework.Channel
 import org.phoenixframework.Socket
 
@@ -17,44 +14,47 @@ class MainActivity : AppCompatActivity() {
     const val TAG = "MainActivity"
   }
 
+  private lateinit var binding: ActivityMainBinding
+
   private val messagesAdapter = MessagesAdapter()
   private val layoutManager = LinearLayoutManager(this)
 
 
   // Use when connecting to https://github.com/dwyl/phoenix-chat-example
-  // private val socket = Socket("https://phxchat.herokuapp.com/socket/websocket")
-  // private val topic = "room:lobby"
+  private val socket = Socket("https://phoenix-chat.fly.dev/socket/websocket")
+  private val topic = "room:lobby"
 
   // Use when connecting to local server
- private val socket = Socket("ws://10.0.2.2:4000/socket/websocket")
- private val topic = "rooms:lobby"
+ // private val socket = Socket("ws://10.0.2.2:4000/socket/websocket")
+ // private val topic = "rooms:lobby"
 
   private var lobbyChannel: Channel? = null
 
   private val username: String
-    get() = username_input.text.toString()
+    get() = binding.usernameInput.text.toString()
 
   private val message: String
-    get() = message_input.text.toString()
+    get() = binding.messageInput.text.toString()
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    setContentView(R.layout.activity_main)
 
+    this.binding = ActivityMainBinding.inflate(layoutInflater)
+    setContentView(binding.root)
 
     layoutManager.stackFromEnd = true
 
-    messages_recycler_view.layoutManager = layoutManager
-    messages_recycler_view.adapter = messagesAdapter
+    binding.messagesRecyclerView.layoutManager = layoutManager
+    binding.messagesRecyclerView.adapter = messagesAdapter
 
     socket.onOpen {
       this.addText("Socket Opened")
-      runOnUiThread { connect_button.text = "Disconnect" }
+      runOnUiThread { binding.connectButton.text = "Disconnect" }
     }
 
     socket.onClose {
       this.addText("Socket Closed")
-      runOnUiThread { connect_button.text = "Connect" }
+      runOnUiThread { binding.connectButton.text = "Connect" }
     }
 
     socket.onError { throwable, response ->
@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    connect_button.setOnClickListener {
+    binding.connectButton.setOnClickListener {
       if (socket.isConnected) {
         this.disconnectAndLeave()
       } else {
@@ -76,7 +76,7 @@ class MainActivity : AppCompatActivity() {
       }
     }
 
-    send_button.setOnClickListener { sendMessage() }
+    binding.sendButton.setOnClickListener { sendMessage() }
   }
 
   private fun sendMessage() {
@@ -85,7 +85,7 @@ class MainActivity : AppCompatActivity() {
         ?.receive("ok") { Log.d(TAG, "success $it") }
         ?.receive("error") { Log.d(TAG, "error $it") }
 
-    message_input.text.clear()
+    binding.messageInput.text.clear()
   }
 
   private fun disconnectAndLeave() {
@@ -132,9 +132,7 @@ class MainActivity : AppCompatActivity() {
   private fun addText(message: String) {
     runOnUiThread {
       this.messagesAdapter.add(message)
-      layoutManager.smoothScrollToPosition(messages_recycler_view, null, messagesAdapter.itemCount)
+      layoutManager.smoothScrollToPosition(binding.messagesRecyclerView, null, messagesAdapter.itemCount)
     }
-
   }
-
 }
