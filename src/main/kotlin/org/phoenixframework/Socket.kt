@@ -100,7 +100,7 @@ const val WS_CLOSE_ABNORMAL = 1006
 /**
  * A closure that will return an optional Payload
  */
-typealias PayloadClosure = () -> Payload?
+typealias PayloadClosure = () -> Payload
 
 /** A closure that will encode a Map<String, Any> into a JSON String */
 typealias EncodeClosure = (Any) -> String
@@ -242,7 +242,7 @@ class Socket(
    */
   constructor(
     url: String,
-    params: Payload? = null,
+    params: Payload = mapOf(),
     vsn: String = Defaults.VSN,
     encode: EncodeClosure = Defaults.encode,
     decode: DecodeClosure = Defaults.decode,
@@ -358,9 +358,14 @@ class Socket(
   fun channel(
     topic: String,
     params: Payload = mapOf()
+  ): Channel = this.channel(topic) { params }
+
+  fun channel(
+    topic: String,
+    paramsClosure: PayloadClosure
   ): Channel {
-    val channel = Channel(topic, params, this)
-    this.channels = this.channels + channel
+    val channel = Channel(topic, paramsClosure, this)
+    this.channels += channel
 
     return channel
   }

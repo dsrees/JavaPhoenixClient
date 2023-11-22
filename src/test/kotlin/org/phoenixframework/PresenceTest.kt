@@ -196,7 +196,7 @@ class PresenceTest {
     @Test
     internal fun `onJoins new presences and onLeaves left presences`() {
       val newState = fixState
-      var state = mutableMapOf(
+      var state: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u4" to mutableMapOf("metas" to listOf(mapOf("id" to 4, "phx_ref" to "4"))))
 
       val joined: PresenceDiff = mutableMapOf()
@@ -245,9 +245,9 @@ class PresenceTest {
 
     @Test
     internal fun `onJoins only newly added metas`() {
-      var state = mutableMapOf(
+      var state: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u3" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3"))))
-      val newState = mutableMapOf(
+      val newState: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u3" to mutableMapOf("metas" to listOf(
               mapOf("id" to 3, "phx_ref" to "3"),
               mapOf("id" to 3, "phx_ref" to "3.new")
@@ -285,9 +285,9 @@ class PresenceTest {
 
     @Test
     internal fun `onLeaves only newly removed metas`() {
-      val newState = mutableMapOf(
+      val newState: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u3" to mutableMapOf("metas" to listOf(mapOf("id" to 3, "phx_ref" to "3"))))
-      var state = mutableMapOf(
+      var state: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u3" to mutableMapOf("metas" to listOf(
               mapOf("id" to 3, "phx_ref" to "3"),
               mapOf("id" to 3, "phx_ref" to "3.left")
@@ -326,13 +326,13 @@ class PresenceTest {
 
     @Test
     internal fun `syncs both joined and left metas`() {
-      val newState = mutableMapOf(
+      val newState: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u3" to mutableMapOf("metas" to listOf(
               mapOf("id" to 3, "phx_ref" to "3"),
               mapOf("id" to 3, "phx_ref" to "3.new")
           )))
 
-      var state = mutableMapOf(
+      var state: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u3" to mutableMapOf("metas" to listOf(
               mapOf("id" to 3, "phx_ref" to "3"),
               mapOf("id" to 3, "phx_ref" to "3.left")
@@ -421,13 +421,13 @@ class PresenceTest {
 
     @Test
     internal fun `removes meta while leaving key if other metas exist`() {
-      var state = mutableMapOf(
+      var state: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u1" to mutableMapOf("metas" to listOf(
               mapOf("id" to 1, "phx_ref" to "1"),
               mapOf("id" to 1, "phx_ref" to "1.2")
           )))
 
-      val leaves = mutableMapOf(
+      val leaves: MutableMap<String, MutableMap<String, List<Map<String, Any>>>> = mutableMapOf(
           "u1" to mutableMapOf("metas" to listOf(
               mapOf("id" to 1, "phx_ref" to "1")
           )))

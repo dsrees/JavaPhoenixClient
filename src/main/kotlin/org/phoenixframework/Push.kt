@@ -32,8 +32,8 @@ class Push(
   val channel: Channel,
   /** The event the Push is targeting */
   val event: String,
-  /** The message to be sent */
-  var payload: Payload = mapOf(),
+  /** Closure that allows changing parameters sent during push */
+  var payloadClosure: PayloadClosure,
   /** Duration before the message is considered timed out and failed to send */
   var timeout: Long = Defaults.TIMEOUT
 ) {
@@ -55,6 +55,23 @@ class Push(
 
   /** The event that is associated with the reference ID of the Push */
   var refEvent: String? = null
+
+  var payload: Payload
+    get() = payloadClosure.invoke()
+    set(value) {
+      payloadClosure = { value }
+    }
+
+  constructor(
+    /** The channel the Push is being sent through */
+    channel: Channel,
+    /** The event the Push is targeting */
+    event: String,
+    /** The message to be sent */
+    payload: Payload = mapOf(),
+    /** Duration before the message is considered timed out and failed to send */
+    timeout: Long = Defaults.TIMEOUT
+  ) : this(channel, event, { payload }, timeout)
 
   //------------------------------------------------------------------------------
   // Public

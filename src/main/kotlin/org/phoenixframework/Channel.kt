@@ -38,7 +38,7 @@ data class Binding(
  */
 class Channel(
   val topic: String,
-  params: Payload,
+  paramsClosure: PayloadClosure,
   internal val socket: Socket
 ) {
 
@@ -94,10 +94,10 @@ class Channel(
   internal var timeout: Long
 
   /** Params passed in through constructions and provided to the JoinPush */
-  var params: Payload = params
+  var params: Payload
+    get() = joinPush.payload
     set(value) {
       joinPush.payload = value
-      field = value
     }
 
   /** Set to true once the channel has attempted to join */
@@ -120,6 +120,12 @@ class Channel(
    * handling before dispatching to the Channel event callbacks.
    */
   internal var onMessage: (Message) -> Message = { it }
+
+  constructor(
+    topic: String,
+    params: Payload,
+    socket: Socket
+  ) : this(topic, { params }, socket)
 
   init {
     this.state = State.CLOSED
@@ -148,7 +154,7 @@ class Channel(
     this.joinPush = Push(
         channel = this,
         event = Event.JOIN.value,
-        payload = params,
+        payloadClosure = paramsClosure,
         timeout = timeout)
 
     // Perform once the Channel has joined
