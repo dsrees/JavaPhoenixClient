@@ -149,6 +149,32 @@ class ChannelTest {
     /* End JoinParams */
   }
 
+
+  @Nested
+  @DisplayName("join paramsClosure")
+  inner class JoinParamsClosure {
+    @Test
+    internal fun `updating join params closure`() {
+      val paramsClosure = { mapOf("value" to 1) }
+      val change = mapOf("value" to 2)
+
+      channel = Channel("topic", paramsClosure, socket)
+      val joinPush = channel.joinPush
+
+      assertThat(joinPush.channel).isEqualTo(channel)
+      assertThat(joinPush.payload["value"]).isEqualTo(1)
+      assertThat(joinPush.event).isEqualTo("phx_join")
+      assertThat(joinPush.timeout).isEqualTo(10_000L)
+
+      channel.params = change
+      assertThat(joinPush.channel).isEqualTo(channel)
+      assertThat(joinPush.payload["value"]).isEqualTo(2)
+      assertThat(channel.params["value"]).isEqualTo(2)
+      assertThat(joinPush.event).isEqualTo("phx_join")
+      assertThat(joinPush.timeout).isEqualTo(10_000L)
+    }
+  }
+
   @Nested
   @DisplayName("join")
   inner class Join {

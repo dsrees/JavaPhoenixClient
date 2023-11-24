@@ -26,13 +26,9 @@ import com.google.gson.FieldNamingPolicy
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
-import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import org.phoenixframework.Defaults.gson
 import java.net.URL
-import javax.swing.text.html.HTML.Tag.P
 
 object Defaults {
 
@@ -156,10 +152,8 @@ object Defaults {
     httpBuilder.addQueryParameter("vsn", vsn)
 
     // Append any additional query params
-    paramsClosure.invoke()?.let {
-      it.forEach { (key, value) ->
-        httpBuilder.addQueryParameter(key, value.toString())
-      }
+    paramsClosure.invoke().forEach { (key, value) ->
+      httpBuilder.addQueryParameter(key, value.toString())
     }
 
     // Return the [URL] that will be used to establish a connection

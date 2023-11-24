@@ -48,7 +48,7 @@ class SocketTest {
     internal fun `sets defaults`() {
       val socket = Socket("wss://localhost:4000/socket")
 
-      assertThat(socket.paramsClosure.invoke()).isNull()
+      assertThat(socket.paramsClosure.invoke()).isEmpty()
       assertThat(socket.channels).isEmpty()
       assertThat(socket.sendBuffer).isEmpty()
       assertThat(socket.ref).isEqualTo(0)
