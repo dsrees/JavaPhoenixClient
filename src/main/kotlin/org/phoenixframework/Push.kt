@@ -47,6 +47,9 @@ class Push(
   /** Hooks into a Push. Where .receive("ok", callback(Payload)) are stored */
   var receiveHooks: MutableMap<String, List<((message: Message) -> Unit)>> = HashMap()
 
+  /** Hooks into a Push. Where .receiveAll(callback(status, message)) are stored */
+  private var receiveAllHooks: MutableList<(status: String, message: Message) -> Unit> = mutableListOf()
+
   /** True if the Push has been sent */
   var sent: Boolean = false
 
@@ -117,6 +120,28 @@ class Push(
     return this
   }
 
+  /**
+   * Receives any event that was a response to an outbound message.
+   *
+   * Example:
+   *    channel
+   *        .send("event", mPayload)
+   *        .receive { status, message ->
+   *            print(status) // "ok"
+   *        }
+   */
+  fun receive(callback: (status: String, message: Message) -> Unit): Push {
+    // If the message has already been received, pass it to the callback.
+    receivedMessage?.let {
+      val status = it.status
+      if (status != null) {
+        callback(status, it)
+      }
+    }
+    receiveAllHooks.add(callback)
+    return this
+  }
+
   //------------------------------------------------------------------------------
   // Internal
   //------------------------------------------------------------------------------
@@ -182,6 +207,7 @@ class Push(
    */
   private fun matchReceive(status: String, message: Message) {
     receiveHooks[status]?.forEach { it(message) }
+    receiveAllHooks.forEach { it(status, message) }
   }
 
   /** Removes receive hook from Channel regarding this Push */

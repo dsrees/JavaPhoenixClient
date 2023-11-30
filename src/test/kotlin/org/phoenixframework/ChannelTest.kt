@@ -28,6 +28,7 @@ class ChannelTest {
 
   @Mock lateinit var socket: Socket
   @Mock lateinit var mockCallback: ((Message) -> Unit)
+  @Mock lateinit var mockStatusCallback: ((String, Message) -> Unit)
 
   private val kDefaultRef = "1"
   private val kDefaultTimeout = 10_000L
@@ -410,6 +411,11 @@ class ChannelTest {
       joinPush.trigger("error", mapOf("a" to "b"))
     }
 
+    private fun receivesApproved() {
+      fakeClock.tick(joinPush.timeout / 2)
+      joinPush.trigger("approved", mapOf("a" to "b"))
+    }
+
     @Nested
     @DisplayName("receives 'ok'")
     inner class ReceivesOk {
@@ -650,6 +656,52 @@ class ChannelTest {
       }
 
       /* End ReceivesError */
+    }
+
+
+    @Nested
+    @DisplayName("receives 'all status'")
+    inner class ReceivesAllStatus {
+      @Test
+      internal fun `triggers receive('error') callback after error response`() {
+        assertThat(channel.state).isEqualTo(Channel.State.JOINING)
+        joinPush.receive(mockStatusCallback)
+
+        receivesError()
+        joinPush.trigger("error", kEmptyPayload)
+        verify(mockStatusCallback, times(1)).invoke(any(), any())
+      }
+
+      @Test
+      internal fun `triggers receive('error') callback if error response already received`() {
+        receivesError()
+
+        joinPush.receive(mockStatusCallback)
+
+        verify(mockStatusCallback).invoke(any(), any())
+      }
+
+      @Test
+      internal fun `triggers receive('approved') callback after approved response`() {
+        assertThat(channel.state).isEqualTo(Channel.State.JOINING)
+        joinPush.receive(mockStatusCallback)
+
+        receivesApproved()
+        joinPush.trigger("approved", kEmptyPayload)
+        verify(mockStatusCallback, times(1)).invoke(any(), any())
+
+      }
+
+      @Test
+      internal fun `triggers receive('approved') callback if approved response already received`() {
+        receivesApproved()
+
+        joinPush.receive(mockStatusCallback)
+
+        verify(mockStatusCallback).invoke(any(), any())
+      }
+
+      /* End ReceivesAllStatus */
     }
 
     /* End JoinPush */
