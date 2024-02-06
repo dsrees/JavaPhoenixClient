@@ -170,6 +170,8 @@ class Socket(
   /** Disables heartbeats from being sent. Default is false. */
   var skipHeartbeat: Boolean = false
 
+  var isInternetAvailable: Boolean = false
+
   //------------------------------------------------------------------------------
   // Internal Attributes
   //------------------------------------------------------------------------------
@@ -275,8 +277,10 @@ class Socket(
       dispatchQueue = dispatchQueue,
       timerCalculation = { reconnectAfterMs(it) },
       callback = {
-        this.logItems("Socket attempting to reconnect")
-        this.teardown { this.connect() }
+        if(isInternetAvailable) {
+          this.logItems("Socket attempting to reconnect")
+          this.teardown { this.connect() }
+        }
       })
   }
 
