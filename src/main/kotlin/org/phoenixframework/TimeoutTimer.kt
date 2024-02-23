@@ -62,9 +62,9 @@ class TimeoutTimer(
   }
 
   //------------------------------------------------------------------------------
-  // Private
+  // make it open for disable retry mechanism
   //------------------------------------------------------------------------------
-  private fun clearTimer() {
+  fun clearTimer() {
     // Cancel the task from completing, allowing it to fi
     this.workItem?.cancel()
     this.workItem = null

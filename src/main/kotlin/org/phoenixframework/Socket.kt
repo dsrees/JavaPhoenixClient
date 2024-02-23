@@ -212,7 +212,7 @@ class Socket(
   internal var pendingHeartbeatRef: String? = null
 
   /** Timer to use when attempting to reconnect */
-  internal var reconnectTimer: TimeoutTimer
+  internal lateinit var reconnectTimer: TimeoutTimer
 
   /** True if the Socket closed cleaned. False if not (connection timeout, heartbeat, etc) */
   internal var closeWasClean = false
@@ -273,15 +273,7 @@ class Socket(
     this.endpointUrl = Defaults.buildEndpointUrl(this.endpoint, this.paramsClosure, this.vsn)
 
     // Create reconnect timer
-    this.reconnectTimer = TimeoutTimer(
-      dispatchQueue = dispatchQueue,
-      timerCalculation = { reconnectAfterMs(it) },
-      callback = {
-        if(isInternetAvailable) {
-          this.logItems("Socket attempting to reconnect")
-          this.teardown { this.connect() }
-        }
-      })
+    enableRetry()
   }
 
   //------------------------------------------------------------------------------
@@ -614,4 +606,23 @@ class Socket(
     // Inform any state callbacks of the error
     this.stateChangeCallbacks.error.forEach { it.second.invoke(t, response) }
   }
+   fun stopRetry()
+   {
+     this.reconnectTimer.clearTimer()
+   }
+
+  fun enableRetry()
+  {
+    this.reconnectTimer = TimeoutTimer(
+      dispatchQueue = dispatchQueue,
+      timerCalculation = { reconnectAfterMs(it) },
+      callback = {
+        if(isInternetAvailable) {
+          this.logItems("Socket attempting to reconnect")
+          this.teardown { this.connect() }
+        }
+      })
+
+  }
+
 }
